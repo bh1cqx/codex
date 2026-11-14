@@ -87,6 +87,7 @@ impl LocalSettings {
                 status_line: config.tui_status_line.clone(),
                 status_line_provider: config.tui_status_line_provider.clone(),
                 status_line_rows: config.tui_status_line_rows.clone(),
+                status_header: config.tui_status_header.clone(),
                 status_line_use_colors: config.tui_status_line_use_colors,
                 terminal_title: config.tui_terminal_title.clone(),
                 theme: config.tui_theme.clone(),

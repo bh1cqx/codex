@@ -30,6 +30,7 @@ async fn launch_screen_mode_survives_configuration_reload() -> anyhow::Result<()
     config.tui_effects.starfield = true;
     config.disable_paste_burst = false;
     config.show_tooltips = true;
+    config.tui_status_header = Some(vec!["model-with-reasoning".into(), "git-branch".into()]);
 
     for (alternate_screen, owned, expected_mode, expected_alt) in [
         (true, true, TranscriptMode::Owned, AltScreenMode::Auto),
@@ -40,6 +41,7 @@ async fn launch_screen_mode_survives_configuration_reload() -> anyhow::Result<()
         tui.set_alt_screen_enabled(alternate_screen);
         tui.set_owned_screen(owned)?;
         let local = LocalSettings::for_tui(&config, &tui);
+        assert_eq!(local.tui.status_header, config.tui_status_header);
         assert_eq!(
             (local.transcript_mode, local.tui.alternate_screen),
             (expected_mode, expected_alt),

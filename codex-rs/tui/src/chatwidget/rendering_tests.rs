@@ -75,6 +75,167 @@ fn contains_text(buffer: &Buffer, text: &str) -> bool {
         })
 }
 
+fn status_header_text(widget: &ChatWidget) -> Option<String> {
+    widget
+        .status_header
+        .as_ref()
+        .and_then(FooterContent::native_parts)
+        .map(|(line, _)| line.to_string())
+}
+
+#[tokio::test]
+async fn status_header_tracks_current_thread_and_branch_without_changing_footer() {
+    let (mut widget, _sender, _events, _operations) = make_chatwidget_manual_with_sender().await;
+    let thread_id = ThreadId::new();
+    widget.thread_id = Some(thread_id);
+    widget.local_settings.tui.terminal_title = Some(vec![]);
+    widget.local_settings.tui.status_line = Some(vec!["model-name".into()]);
+    widget.local_settings.tui.status_header = Some(vec!["thread-name".into(), "git-branch".into()]);
+    widget.on_thread_name_updated(thread_id, Some("First task".into()));
+    let footer = widget.bottom_pane.status_line_content().cloned();
+    assert_eq!(status_header_text(&widget).as_deref(), Some("First task"));
+
+    let first_cwd = widget.status_line_workspace_cwd().to_path_buf();
+    assert_eq!(widget.status_line_branch_cwd.as_ref(), Some(&first_cwd));
+    widget.set_status_line_branch(first_cwd.clone(), Some("feature/first".into()));
+    assert_eq!(
+        status_header_text(&widget).as_deref(),
+        Some("First task · feature/first")
+    );
+    widget.on_thread_name_updated(ThreadId::new(), Some("Unrelated task".into()));
+    widget.on_thread_name_updated(thread_id, Some("Renamed task".into()));
+    assert_eq!(
+        status_header_text(&widget).as_deref(),
+        Some("Renamed task · feature/first")
+    );
+
+    let second_cwd = crate::test_support::test_path_buf("/tmp/second-project");
+    widget.current_cwd = Some(second_cwd.clone());
+    widget.refresh_status_surfaces();
+    widget.set_status_line_branch(first_cwd, Some("stale-branch".into()));
+    assert_eq!(status_header_text(&widget).as_deref(), Some("Renamed task"));
+    widget.set_status_line_branch(second_cwd, Some("feature/second".into()));
+    assert_eq!(
+        status_header_text(&widget).as_deref(),
+        Some("Renamed task · feature/second")
+    );
+    assert_eq!(widget.bottom_pane.status_line_content(), footer.as_ref());
+
+    widget.local_settings.tui.status_header = Some(vec![]);
+    widget.refresh_status_surfaces();
+    assert_eq!(status_header_text(&widget), None);
+    assert_eq!(widget.bottom_pane.status_line_content(), footer.as_ref());
+}
+
+#[tokio::test]
+async fn status_header_reserves_one_row_and_yields_to_the_composer() {
+    use crate::bottom_pane::CommandPopupPlacement;
+    use crate::bottom_pane::ComposerRenderOptions;
+
+    for placement in [
+        CommandPopupPlacement::AboveComposer,
+        CommandPopupPlacement::Overlay,
+    ] {
+        let (mut widget, _sender, _events, _operations) =
+            make_chatwidget_manual_with_sender().await;
+        widget.local_settings.tui.terminal_title = Some(vec![]);
+        widget.local_settings.tui.status_line = Some(vec![]);
+        widget.thread_name = Some("Header for this session".into());
+        widget.handle_paste("draft stays editable".into());
+        widget.refresh_status_surfaces();
+        let options = ComposerRenderOptions {
+            command_popup_placement: placement,
+            ..Default::default()
+        };
+        let width = 80;
+        let height = widget.bottom_pane_renderable(options).desired_height(width);
+        let render = |widget: &ChatWidget, height| {
+            let area = Rect::new(/*x*/ 3, /*y*/ 7, width, height);
+            let content = widget.bottom_pane_renderable(options);
+            let mut buffer = Buffer::empty(area);
+            content.render(area, &mut buffer);
+            (buffer, content.cursor_pos(area), content.cursor_style(area))
+        };
+        let before = render(&widget, height);
+        let (cursor_x, cursor_y) = before.1.expect("editable composer");
+
+        widget.local_settings.tui.status_header = Some(vec!["thread-name".into()]);
+        widget.refresh_status_surfaces();
+        assert_eq!(
+            widget.bottom_pane_renderable(options).desired_height(width),
+            height + 1
+        );
+        let after = render(&widget, height + 1);
+        assert!(contains_text(&after.0, "Header for this session"));
+        assert!(contains_text(&after.0, "draft stays editable"));
+        assert_eq!(after.1, Some((cursor_x, cursor_y + 1)));
+        assert_eq!(after.2, before.2);
+
+        let crowded = render(&widget, height);
+        assert_eq!(crowded, before);
+    }
+}
+
+#[tokio::test]
+async fn status_header_does_not_cover_agent_or_selection_views() {
+    let (mut widget, _sender, _events, _operations) = make_chatwidget_manual_with_sender().await;
+    widget.local_settings.tui.terminal_title = Some(vec![]);
+    widget.local_settings.tui.status_header = Some(vec!["thread-name".into()]);
+    widget.thread_name = Some("Header must stay hidden".into());
+    widget.refresh_status_surfaces();
+    widget.show_selection_view(crate::bottom_pane::SelectionViewParams {
+        view_id: Some(crate::app::AGENTS_OVERVIEW_VIEW_ID),
+        title: Some("Agent command center".into()),
+        items: vec![crate::bottom_pane::SelectionItem {
+            name: "Another session".into(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    });
+    let frame = render_frame(&widget, /*width*/ 80);
+    assert!(contains_text(&frame, "Another session"));
+    assert!(!contains_text(&frame, "Header must stay hidden"));
+}
+
+#[tokio::test]
+async fn status_header_omits_unavailable_items_and_warns_once_for_invalid_items() {
+    let (mut widget, _sender, mut events, _operations) = make_chatwidget_manual_with_sender().await;
+    widget.local_settings.tui.terminal_title = Some(vec![]);
+    widget.thread_id = Some(ThreadId::new());
+    widget.local_settings.tui.status_header = Some(vec![
+        "unknown-header-item".into(),
+        "thread-name".into(),
+        "five-hour-limit".into(),
+    ]);
+    widget.thread_name = Some("Visible title".into());
+    widget.rate_limit_snapshots_by_limit_id.clear();
+    widget.refresh_status_surfaces();
+    widget.refresh_status_surfaces();
+    assert_eq!(
+        status_header_text(&widget).as_deref(),
+        Some("Visible title")
+    );
+
+    let warnings = std::iter::from_fn(|| events.try_recv().ok())
+        .filter_map(|event| match event {
+            AppEvent::InsertHistoryCell(cell) => Some(
+                cell.transcript_lines(/*width*/ 160)
+                    .iter()
+                    .map(Line::to_string)
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            ),
+            _ => None,
+        })
+        .filter(|text| text.contains("Ignored invalid status header items"))
+        .count();
+    assert_eq!(warnings, 1);
+
+    widget.local_settings.tui.status_header = Some(vec!["five-hour-limit".into()]);
+    widget.refresh_status_surfaces();
+    assert_eq!(status_header_text(&widget), None);
+}
+
 #[tokio::test]
 async fn owned_bottom_pane_preserves_draft_cursor_and_read_only_notice() {
     let (mut widget, _sender, _events, _operations) = make_chatwidget_manual_with_sender().await;

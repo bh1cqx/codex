@@ -410,7 +410,7 @@ impl ChatWidget {
         }
         let mut selected = SelectedThreadUsage::default();
         if !self.read_only_history {
-            for item in self.configured_status_line_items() {
+            for item in self.configured_status_line_items().into_iter().chain(self.local_settings.tui.status_header.iter().flatten().cloned()) {
                 match item.parse::<StatusLineItem>() {
                     Ok(StatusLineItem::ThreadCredits) => selected.credits = true,
                     Ok(StatusLineItem::EstimatedThreadCost) => selected.estimated_cost = true,

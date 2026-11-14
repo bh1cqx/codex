@@ -1,4 +1,4 @@
-//! Status-line and terminal-title rendering helpers for `ChatWidget`.
+//! Status header, footer, and terminal-title rendering helpers for `ChatWidget`.
 //!
 //! Keeping this logic in a focused submodule makes the additive title/status
 //! behavior easier to review without paging through the rest of `chatwidget.rs`.
@@ -45,31 +45,42 @@ const TERMINAL_TITLE_ACTION_REQUIRED_PREFIX_HIDDEN: &str = "[ . ] Action Require
 #[derive(Debug)]
 /// Parsed status-surface configuration for one refresh pass.
 ///
-/// The status line and terminal title share some expensive or stateful inputs
+/// The header, footer, and terminal title share expensive or stateful inputs
 /// (notably git branch lookup and invalid-item warnings). This snapshot lets one
 /// refresh pass compute those shared concerns once, then render both surfaces
 /// from the same selection set.
 struct StatusSurfaceSelections {
     status_line_items: Vec<StatusLineItem>,
     invalid_status_line_items: Vec<String>,
+    status_header_items: Vec<StatusLineItem>,
+    invalid_status_header_items: Vec<String>,
     terminal_title_items: Vec<TerminalTitleItem>,
     invalid_terminal_title_items: Vec<String>,
 }
 
 impl StatusSurfaceSelections {
+    fn native_status_items(&self) -> impl Iterator<Item = StatusLineItem> + '_ {
+        self.status_line_items
+            .iter()
+            .chain(&self.status_header_items)
+            .copied()
+    }
+
     fn uses_git_branch(&self) -> bool {
-        self.status_line_items.contains(&StatusLineItem::GitBranch)
+        self.native_status_items()
+            .any(|item| item == StatusLineItem::GitBranch)
             || self
                 .terminal_title_items
                 .contains(&TerminalTitleItem::GitBranch)
     }
 
     fn uses_git_summary(&self) -> bool {
-        self.status_line_items
-            .contains(&StatusLineItem::PullRequestNumber)
-            || self
-                .status_line_items
-                .contains(&StatusLineItem::BranchChanges)
+        self.native_status_items().any(|item| {
+            matches!(
+                item,
+                StatusLineItem::PullRequestNumber | StatusLineItem::BranchChanges
+            )
+        })
     }
 }
 
@@ -87,11 +98,24 @@ pub(super) struct CachedProjectRootName {
 impl ChatWidget {
     fn status_surface_selections(&self) -> StatusSurfaceSelections {
         let (status_line_items, invalid_status_line_items) = self.status_line_items_with_invalids();
+        let (status_header_items, invalid_status_header_items) = if self.read_only_history {
+            Default::default()
+        } else {
+            parse_items_with_invalids(
+                self.local_settings
+                    .tui
+                    .status_header
+                    .clone()
+                    .unwrap_or_default(),
+            )
+        };
         let (terminal_title_items, invalid_terminal_title_items) =
             self.terminal_title_items_with_invalids();
         StatusSurfaceSelections {
             status_line_items,
             invalid_status_line_items,
+            status_header_items,
+            invalid_status_header_items,
             terminal_title_items,
             invalid_terminal_title_items,
         }
@@ -139,6 +163,19 @@ impl ChatWidget {
         }
     }
 
+    fn warn_invalid_status_header_items_once(&mut self, invalid_items: &[String]) {
+        if self.thread_id.is_some()
+            && !invalid_items.is_empty()
+            && !self.status_header_invalid_items_warned
+        {
+            self.status_header_invalid_items_warned = true;
+            self.on_warning(format!(
+                "Ignored invalid status header items: {}.",
+                proper_join(invalid_items)
+            ));
+        }
+    }
+
     fn sync_status_surface_shared_state(&mut self, selections: &StatusSurfaceSelections) {
         if !selections.uses_git_branch() {
             self.status_line_branch = None;
@@ -164,7 +201,7 @@ impl ChatWidget {
             }
         }
 
-        if !self.uses_workspace_headline(&selections.status_line_items) {
+        if !self.uses_workspace_headline(selections) {
             self.status_line_workspace_headline = None;
             self.status_line_workspace_headline_pending_request_id = None;
             self.status_line_workspace_headline_last_requested_at = None;
@@ -208,18 +245,7 @@ impl ChatWidget {
             .unwrap_or_else(|| vec![selections.status_line_items.clone()]);
         let mut lines = Vec::new();
         for items in item_rows {
-            let mut segments = Vec::new();
-            for item in items {
-                if let Some(value) = self.status_line_value_for_item(item) {
-                    segments.push((item, value));
-                }
-            }
-            if let Some(line) = status_line_from_segments(
-                segments,
-                self.local_settings.tui.status_line_use_colors,
-                self.thread_id,
-                self.status_line_pull_request_url(),
-            ) {
+            if let Some(line) = self.status_line_for_items(items) {
                 lines.push(line);
             }
         }
@@ -229,6 +255,35 @@ impl ChatWidget {
             lines.into_iter().next().map(Into::into)
         };
         self.set_status_line(status);
+    }
+
+    fn status_line_for_items(
+        &mut self,
+        items: impl IntoIterator<Item = StatusLineItem>,
+    ) -> Option<HyperlinkLine> {
+        let segments = items
+            .into_iter()
+            .filter_map(|item| {
+                self.status_line_value_for_item(item)
+                    .map(|value| (item, value))
+            })
+            .collect::<Vec<_>>();
+        status_line_from_segments(
+            segments,
+            self.local_settings.tui.status_line_use_colors,
+            self.thread_id,
+            self.status_line_pull_request_url(),
+        )
+    }
+
+    fn refresh_status_header_from_selections(&mut self, selections: &StatusSurfaceSelections) {
+        let header = self
+            .status_line_for_items(selections.status_header_items.iter().copied())
+            .map(Into::into);
+        if self.status_header != header {
+            self.status_header = header;
+            self.request_redraw();
+        }
     }
 
     /// Clears the terminal title Codex most recently wrote, if any.
@@ -295,10 +350,10 @@ impl ChatWidget {
         }
     }
 
-    /// Recomputes both status surfaces from one shared config snapshot.
+    /// Recomputes the status surfaces from one shared config snapshot.
     ///
-    /// This is the common refresh entrypoint for the footer status line and the
-    /// terminal title. It parses both configurations once, emits invalid-item
+    /// This is the common refresh entrypoint for the header, footer, and
+    /// terminal title. It parses their configurations once, emits invalid-item
     /// warnings once, synchronizes shared cached state (such as git-branch
     /// lookup), then renders each surface from that shared snapshot.
     pub(crate) fn refresh_status_surfaces(&mut self) {
@@ -306,8 +361,10 @@ impl ChatWidget {
             .set_luna_reserve_active(self.current_model() == LUNA_RESERVE_MODEL);
         let selections = self.status_surface_selections();
         self.warn_invalid_status_line_items_once(&selections.invalid_status_line_items);
+        self.warn_invalid_status_header_items_once(&selections.invalid_status_header_items);
         self.warn_invalid_terminal_title_items_once(&selections.invalid_terminal_title_items);
         self.sync_status_surface_shared_state(&selections);
+        self.refresh_status_header_from_selections(&selections);
         self.refresh_status_line_from_selections(&selections);
         self.refresh_terminal_title_from_selections(&selections);
     }
@@ -673,9 +730,9 @@ impl ChatWidget {
         });
     }
 
-    fn uses_workspace_headline(&self, status_line_items: &[StatusLineItem]) -> bool {
+    fn uses_workspace_headline(&self, selections: &StatusSurfaceSelections) -> bool {
         self.provider_needs_snapshot()
-            || status_line_items.contains(&StatusLineItem::WorkspaceHeadline)
+            || selections.native_status_items().any(|item| item == StatusLineItem::WorkspaceHeadline)
     }
 
     fn request_status_line_workspace_headline_if_due(&mut self, now: Instant) {
@@ -709,7 +766,7 @@ impl ChatWidget {
     pub(super) fn refresh_status_line_if_workspace_headline_due(&mut self) {
         let now = Instant::now();
         if self.status_line_workspace_headline_should_fetch(now)
-            && self.uses_workspace_headline(&self.status_line_items_with_invalids().0)
+            && self.uses_workspace_headline(&self.status_surface_selections())
         {
             self.refresh_status_line();
         }
@@ -743,7 +800,7 @@ impl ChatWidget {
         }
 
         if !self.status_line_workspace_messages_disabled
-            && self.uses_workspace_headline(&self.status_line_items_with_invalids().0)
+            && self.uses_workspace_headline(&self.status_surface_selections())
         {
             self.frame_requester
                 .schedule_frame_in(crate::workspace_messages::WORKSPACE_HEADLINE_REFRESH_INTERVAL);
