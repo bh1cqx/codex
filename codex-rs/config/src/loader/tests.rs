@@ -49,7 +49,7 @@ async fn multiline_config_loads_automatically_over_the_base_user_config() -> any
 
     std::fs::write(
         &multiline,
-        "[tui]\nstatus_line_rows = [['model'], ['current-dir']]\n",
+        "[tui]\nstatus_line_rows = [['model'], ['current-dir']]\nstatus_header = ['git-branch']\n",
     )?;
     let stack = load().await?;
     assert_eq!(stack.get_user_config_file(), Some(&multiline));
@@ -57,6 +57,7 @@ async fn multiline_config_loads_automatically_over_the_base_user_config() -> any
     assert_eq!(config.model.as_deref(), Some("base-model"));
     let tui = config.tui.expect("TUI config");
     assert_eq!(tui.status_line, Some(vec!["current-dir".to_string()]));
+    assert_eq!(tui.status_header, Some(vec!["git-branch".to_string()]));
     assert_eq!(
         tui.status_line_rows,
         Some(vec![

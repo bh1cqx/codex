@@ -2,6 +2,33 @@ use super::*;
 use pretty_assertions::assert_eq;
 
 #[test]
+fn status_header_uses_a_flat_item_list_and_defaults_hidden() {
+    let tui: Tui =
+        toml::from_str(r#"status_header = ["model-with-reasoning", "current-dir", "git-branch"]"#)
+            .unwrap();
+    assert_eq!(
+        tui.status_header,
+        Some(vec![
+            "model-with-reasoning".to_string(),
+            "current-dir".to_string(),
+            "git-branch".to_string(),
+        ])
+    );
+    let round_trip: Tui = toml::from_str(&toml::to_string(&tui).unwrap()).unwrap();
+    assert_eq!(round_trip, tui);
+    assert_eq!(toml::from_str::<Tui>("").unwrap().status_header, None);
+    assert_eq!(
+        toml::from_str::<Tui>("status_header = []")
+            .unwrap()
+            .status_header,
+        Some(vec![])
+    );
+    for invalid in [r#"true"#, r#"[["model"]]"#, r#"["model", 1]"#] {
+        assert!(toml::from_str::<Tui>(&format!("status_header = {invalid}")).is_err());
+    }
+}
+
+#[test]
 fn status_line_rows_round_trip_without_changing_the_single_line_fallback() {
     let config = r#"
 status_line = ["model"]

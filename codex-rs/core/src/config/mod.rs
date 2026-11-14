@@ -896,6 +896,9 @@ pub struct Config {
     /// Explicit status rows; overrides `tui_status_line` when set.
     pub tui_status_line_rows: Option<Vec<Vec<String>>>,
 
+    /// Optional status item identifiers shown above the composer.
+    pub tui_status_header: Option<Vec<String>>,
+
     /// Whether to color status line items with colors from the active syntax theme.
     pub tui_status_line_use_colors: bool,
 
@@ -5035,6 +5038,7 @@ impl Config {
             tui_status_line: cfg.tui.as_ref().and_then(|t| t.status_line.clone()),
             tui_status_line_provider: cfg.tui.as_ref().and_then(|t| t.status_line_provider.clone()),
             tui_status_line_rows: cfg.tui.as_ref().and_then(|t| t.status_line_rows.clone()),
+            tui_status_header: cfg.tui.as_ref().and_then(|t| t.status_header.clone()),
             tui_status_line_use_colors: cfg
                 .tui
                 .as_ref()

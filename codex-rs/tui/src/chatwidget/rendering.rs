@@ -1,9 +1,10 @@
-//! Shared composer and live-history composition for inline and owned transcript surfaces.
+//! Shared status header, composer, and live-history composition for transcript surfaces.
 
 use super::read_only::BlockedThreadView;
 use super::transcript::ActiveCellLayoutCache;
 use super::transcript::ActiveCellLayoutCacheKey;
 use super::*;
+use crate::bottom_pane::StatusLineFocus;
 use crate::keymap::KeymapContext;
 use crate::line_truncation::span_width;
 use crate::line_truncation::truncate_line_with_ellipsis_if_overflow;
@@ -15,6 +16,32 @@ use crate::wrapping::word_wrap_lines;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
 use std::cell::Cell;
+
+struct StatusHeader<'a> {
+    content: &'a crate::bottom_pane::StatusLine,
+    unfocused: bool,
+}
+
+impl Renderable for StatusHeader<'_> {
+    fn render(&self, area: Rect, buf: &mut Buffer) {
+        let area = area.inset(Insets::tlbr(
+            /*top*/ 0,
+            /*left*/ crate::ui_consts::LIVE_PREFIX_COLS,
+            /*bottom*/ 0,
+            /*right*/ 0,
+        ));
+        let area = Rect {
+            height: area.height.min(1),
+            ..area
+        };
+        let focus = if self.unfocused { StatusLineFocus::Unfocused } else { StatusLineFocus::Focused };
+        self.content.render(area, buf, focus);
+    }
+
+    fn desired_height(&self, width: u16) -> u16 {
+        u16::from(width > crate::ui_consts::LIVE_PREFIX_COLS)
+    }
+}
 
 struct NewBackendControl<'a>(Line<'a>, Option<(usize, String)>);
 
@@ -329,11 +356,35 @@ impl ChatWidget {
         RenderableItem::Owned(Box::new(flex))
     }
 
-    /// Returns the composer, footer, and active modal without the live transcript above it.
+    /// Returns the status header, composer, footer, and active modal without live transcript.
     ///
     /// Both transcript surfaces use this composition so read-only notices and cursor placement
     /// remain consistent. Owned transcripts reserve their shared hint row above the composer.
     pub(crate) fn bottom_pane_renderable<'a>(
+        &'a self,
+        options: crate::bottom_pane::ComposerRenderOptions<'a>,
+    ) -> RenderableItem<'a> {
+        let content = self.bottom_pane_content_renderable(options);
+        let Some(header) = self
+            .status_header
+            .as_ref()
+            .filter(|_| !self.bottom_pane.has_active_view())
+        else {
+            return content;
+        };
+        let mut column = FlexRenderable::new();
+        column.push(
+            /*flex*/ 1,
+            RenderableItem::Owned(Box::new(StatusHeader {
+                content: header,
+                unfocused: options.unfocused,
+            })),
+        );
+        column.push(/*flex*/ 0, content);
+        RenderableItem::Owned(Box::new(column))
+    }
+
+    fn bottom_pane_content_renderable<'a>(
         &'a self,
         mut options: crate::bottom_pane::ComposerRenderOptions<'a>,
     ) -> RenderableItem<'a> {

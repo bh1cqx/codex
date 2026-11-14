@@ -5900,6 +5900,13 @@
           "minimum": 1.0,
           "type": "integer"
         },
+        "status_header": {
+          "description": "Ordered status item identifiers for a single row above the composer. Unset or empty hides the header. Long headers are truncated without wrapping.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "status_line": {
           "default": null,
           "description": "Ordered list of status line item identifiers.\n\nWhen set, the TUI renders the selected items as the status line. When unset, the TUI defaults to: `model-with-reasoning`, `current-dir`, and `thread-name`.",
