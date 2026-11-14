@@ -8,7 +8,7 @@ For a full configuration reference, see [this documentation](https://developers.
 
 ## Status line rows
 
-Set `tui.status_line_rows` to place status items on explicit rows:
+Create `~/.codex/multiline.config.toml` and set `tui.status_line_rows` to place status items on explicit rows:
 
 ```toml
 [tui]
@@ -18,6 +18,10 @@ status_line_rows = [
   ["context-used", "five-hour-limit", "weekly-limit"],
 ]
 ```
+
+This fork automatically loads `multiline.config.toml` over the shared `config.toml`; no command-line flag is needed. Standard Codex continues to use `config.toml`, where you can keep its single-line `tui.status_line` setting. Keeping the fork-only setting in the separate file also lets standard Codex use `--strict-config`.
+
+When the automatic file is present, status-line edits are saved there. If it is absent, the fork uses the shared config. An explicit `--profile` selection or user-config path bypasses the automatic file. Invalid automatic configuration is reported as an error.
 
 Each inner array is one row, with items in the listed order. Rows keep the existing item colors and links. Long rows are truncated with an ellipsis; they do not wrap. Empty rows and rows whose items are all unavailable are omitted. If the terminal cannot fit every row alongside the input and required hints, Codex clips the remaining rows and marks the last visible row with an ellipsis.
 
