@@ -20,6 +20,107 @@ use tempfile::tempdir;
 
 pub(super) struct TestFileSystem;
 
+#[tokio::test]
+async fn multiline_config_loads_automatically_over_the_base_user_config() -> anyhow::Result<()> {
+    let dir = tempdir()?;
+    let base = AbsolutePathBuf::resolve_path_against_base(CONFIG_TOML_FILE, dir.path());
+    let multiline =
+        AbsolutePathBuf::resolve_path_against_base(MULTILINE_CONFIG_TOML_FILE, dir.path());
+    std::fs::write(
+        &base,
+        "model = 'base-model'\n[tui]\nstatus_line = ['current-dir']\n",
+    )?;
+    let load = || {
+        load_config_layers_state(
+            &TestFileSystem,
+            dir.path(),
+            /*cwd*/ None,
+            &[],
+            ConfigLoadOptions {
+                loader_overrides: LoaderOverrides::without_managed_config_for_tests(),
+                strict_config: true,
+                ..Default::default()
+            },
+            &crate::NoopThreadConfigLoader,
+        )
+    };
+    let base_only = load().await?;
+    assert_eq!(base_only.get_user_config_file(), Some(&base));
+
+    std::fs::write(
+        &multiline,
+        "[tui]\nstatus_line_rows = [['model'], ['current-dir']]\n",
+    )?;
+    let stack = load().await?;
+    assert_eq!(stack.get_user_config_file(), Some(&multiline));
+    let config: ConfigToml = stack.effective_config().try_into()?;
+    assert_eq!(config.model.as_deref(), Some("base-model"));
+    let tui = config.tui.expect("TUI config");
+    assert_eq!(tui.status_line, Some(vec!["current-dir".to_string()]));
+    assert_eq!(
+        tui.status_line_rows,
+        Some(vec![
+            vec!["model".to_string()],
+            vec!["current-dir".to_string()],
+        ])
+    );
+
+    std::fs::write(&multiline, "")?;
+    assert_eq!(load().await?.get_user_config_file(), Some(&multiline));
+    Ok(())
+}
+
+#[tokio::test]
+async fn multiline_config_preserves_explicit_selection_and_reports_invalid_files()
+-> anyhow::Result<()> {
+    let dir = tempdir()?;
+    let base = AbsolutePathBuf::resolve_path_against_base(CONFIG_TOML_FILE, dir.path());
+    let multiline =
+        AbsolutePathBuf::resolve_path_against_base(MULTILINE_CONFIG_TOML_FILE, dir.path());
+    let selected = AbsolutePathBuf::resolve_path_against_base("work.config.toml", dir.path());
+    std::fs::write(&base, "[tui]\nstatus_line = ['current-dir']\n")?;
+    std::fs::write(&multiline, "[malformed")?;
+    std::fs::write(&selected, "[tui]\nstatus_line = ['codex-version']\n")?;
+    let load = |loader_overrides| {
+        load_config_layers_state(
+            &TestFileSystem,
+            dir.path(),
+            /*cwd*/ None,
+            &[],
+            ConfigLoadOptions {
+                loader_overrides,
+                strict_config: true,
+                ..Default::default()
+            },
+            &crate::NoopThreadConfigLoader,
+        )
+    };
+    let error = load(LoaderOverrides::without_managed_config_for_tests())
+        .await
+        .expect_err("malformed automatic config");
+    assert!(error.to_string().contains(MULTILINE_CONFIG_TOML_FILE));
+
+    let stack = load(LoaderOverrides {
+        user_config_path: Some(selected.clone()),
+        user_config_profile: Some("work".parse()?),
+        ..LoaderOverrides::without_managed_config_for_tests()
+    })
+    .await?;
+    assert_eq!(stack.get_user_config_file(), Some(&selected));
+    let config: ConfigToml = stack.effective_config().try_into()?;
+    let tui = config.tui.expect("TUI config");
+    assert_eq!(tui.status_line, Some(vec!["codex-version".to_string()]));
+    assert_eq!(tui.status_line_rows, None);
+
+    let ignored = load(LoaderOverrides {
+        ignore_user_config: true,
+        ..LoaderOverrides::without_managed_config_for_tests()
+    })
+    .await?;
+    assert_eq!(ignored.get_user_config_file(), Some(&base));
+    Ok(())
+}
+
 #[test]
 fn project_config_cannot_override_configured_credential_broker_hosts() {
     let mut config: TomlValue = toml::from_str(
