@@ -890,6 +890,9 @@ pub struct Config {
     /// Local choice of built-in status items or an MCP provider.
     pub tui_status_line_provider: Option<Box<StatusLineSelection>>,
 
+    /// Explicit status rows; overrides `tui_status_line` when set.
+    pub tui_status_line_rows: Option<Vec<Vec<String>>>,
+
     /// Whether to color status line items with colors from the active syntax theme.
     pub tui_status_line_use_colors: bool,
 
@@ -4953,6 +4956,7 @@ impl Config {
                 .unwrap_or_default(),
             tui_status_line: cfg.tui.as_ref().and_then(|t| t.status_line.clone()),
             tui_status_line_provider: cfg.tui.as_ref().and_then(|t| t.status_line_provider.clone()),
+            tui_status_line_rows: cfg.tui.as_ref().and_then(|t| t.status_line_rows.clone()),
             tui_status_line_use_colors: cfg
                 .tui
                 .as_ref()

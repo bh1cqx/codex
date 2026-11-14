@@ -43,6 +43,7 @@ impl ChatWidget {
                     let ids = items.iter().map(ToString::to_string).collect::<Vec<_>>();
                     self.status_surface_overrides.status_line = Some(ids.clone());
                     self.local_settings.tui.status_line = Some(ids);
+                    self.local_settings.tui.status_line_rows = None;
                 }
                 if let Some(use_theme_colors) = command.use_theme_colors {
                     self.status_surface_overrides.status_line_use_colors = Some(use_theme_colors);
@@ -61,6 +62,7 @@ impl ChatWidget {
         }
         if let Some(items) = &overrides.status_line {
             self.local_settings.tui.status_line = Some(items.clone());
+            self.local_settings.tui.status_line_rows = None;
         }
         if let Some(use_theme_colors) = overrides.status_line_use_colors {
             self.local_settings.tui.status_line_use_colors = use_theme_colors;

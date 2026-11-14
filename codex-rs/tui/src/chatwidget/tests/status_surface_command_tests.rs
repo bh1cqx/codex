@@ -38,6 +38,69 @@ async fn built_in_statusline_accepts_a_second_enter() {
 }
 
 #[tokio::test]
+async fn status_line_rows_picker_selects_a_row_and_allows_offline_input() {
+    let (mut chat, mut events, _ops) = make_chatwidget_manual(Some("gpt-5.5")).await;
+    let rows = vec![vec!["model".to_string()], vec!["thread-name".to_string()]];
+    chat.local_settings.tui.status_line_rows = Some(rows.clone());
+    chat.open_status_line_setup();
+    assert!(
+        chat.bottom_pane
+            .active_view_accepts_input_when_disconnected()
+    );
+    chat.handle_key_event(KeyCode::Esc.into());
+    assert!(
+        std::iter::from_fn(|| events.try_recv().ok())
+            .any(|event| matches!(event, AppEvent::StatusLineSetupCancelled))
+    );
+    chat.open_status_line_setup();
+    chat.handle_key_event(KeyCode::Down.into());
+    chat.handle_key_event(KeyCode::Enter.into());
+    assert!(
+        std::iter::from_fn(|| events.try_recv().ok())
+            .any(|event| matches!(event, AppEvent::StatusLineRowSelected { row: 1 }))
+    );
+
+    chat.open_status_line_setup_row(Some(1));
+    assert!(
+        chat.bottom_pane
+            .active_view_accepts_input_when_disconnected()
+    );
+    chat.handle_key_event(KeyCode::Esc.into());
+    assert!(
+        std::iter::from_fn(|| events.try_recv().ok())
+            .any(|event| matches!(event, AppEvent::StatusLineSetupCancelled))
+    );
+    assert_eq!(chat.local_settings.tui.status_line_rows, Some(rows));
+}
+
+#[tokio::test]
+async fn status_line_rows_survive_color_changes_and_yield_to_session_item_overrides() {
+    let (mut chat, mut events, _ops) = make_chatwidget_manual(Some("gpt-5.5")).await;
+    let rows = vec![vec!["model".to_string()], vec!["thread-name".to_string()]];
+    chat.local_settings.tui.status_line_rows = Some(rows.clone());
+    let saved_tui = chat.config_panel_tui.clone();
+    dispatch_inline(
+        &mut chat,
+        &mut events,
+        SlashCommand::Statusline,
+        "--no-colors",
+    );
+    assert_eq!(chat.local_settings.tui.status_line_rows, Some(rows.clone()));
+    dispatch_inline(&mut chat, &mut events, SlashCommand::Statusline, "--clear");
+    assert_eq!(chat.local_settings.tui.status_line_rows, None);
+    assert_eq!(chat.local_settings.tui.status_line, Some(vec![]));
+    assert!(chat.status_line_content().is_none());
+    assert_eq!(chat.config_panel_tui, saved_tui);
+
+    let overrides = chat.status_surface_overrides.clone();
+    let (mut restored, _events, _ops) = make_chatwidget_manual(Some("gpt-5.5")).await;
+    restored.local_settings.tui.status_line_rows = Some(rows);
+    restored.restore_status_surface_overrides(overrides);
+    assert_eq!(restored.local_settings.tui.status_line_rows, None);
+    assert!(restored.status_line_content().is_none());
+}
+
+#[tokio::test]
 async fn inline_status_surface_commands_are_session_only_and_atomic() {
     let (mut chat, mut events, _ops) = make_chatwidget_manual(Some("gpt-5.5")).await;
     let saved_tui = chat.config_panel_tui.clone();

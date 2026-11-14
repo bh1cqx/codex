@@ -310,6 +310,7 @@ impl StatusLineSetupView {
     ///
     /// * `status_line_items` - Currently configured item IDs (in display order),
     ///   or `None` to start with all items disabled
+    /// * `row` - Index of the explicit row being edited, or `None` for a single line
     /// * `use_theme_colors` - Whether the preview and saved status line use colors from
     ///   the active theme
     /// * `app_event_tx` - Event sender for dispatching configuration changes
@@ -318,6 +319,7 @@ impl StatusLineSetupView {
     /// enabled. Remaining items are appended and marked as disabled.
     pub(crate) fn new(
         status_line_items: Option<&[String]>,
+        row: Option<usize>,
         use_theme_colors: bool,
         providers: StatuslineProviderActions,
         preview_data: StatusSurfacePreviewData,
@@ -369,8 +371,15 @@ impl StatusLineSetupView {
 
         Self {
             picker: MultiSelectPicker::builder(
-                "Configure Status Line".to_string(),
-                Some("Select which items to display in the status line.".to_string()),
+                row.map_or_else(
+                    || "Configure Status Line".to_string(),
+                    |row| format!("Configure Status Line Row {}", row + 1),
+                ),
+                Some(if row.is_some() {
+                    "Select items for this row. Theme colors apply to all rows.".to_string()
+                } else {
+                    "Select which items to display in the status line.".to_string()
+                }),
                 app_event_tx,
             )
             .list_keymap(list_keymap)
@@ -390,7 +399,7 @@ impl StatusLineSetupView {
                     )
                     .map(Into::into)
             })
-            .on_confirm(|ids, app_event| {
+            .on_confirm(move |ids, app_event| {
                 let use_theme_colors = ids
                     .iter()
                     .any(|id| id == STATUS_LINE_USE_THEME_COLORS_ITEM_ID);
@@ -401,6 +410,7 @@ impl StatusLineSetupView {
                 app_event.send(AppEvent::StatusLineSetup {
                     items,
                     use_theme_colors,
+                    row,
                 });
             })
             .on_cancel(|app_event| {
@@ -735,6 +745,29 @@ mod tests {
     }
 
     #[test]
+    fn status_line_rows_picker_saves_the_selected_row() {
+        let (tx, mut rx) = unbounded_channel();
+        let mut view = StatusLineSetupView::new(
+            Some(&["model".to_string()]),
+            Some(2),
+            /*use_theme_colors*/ false,
+            StatusSurfacePreviewData::default(),
+            AppEventSender::new(tx),
+            crate::keymap::RuntimeKeymap::defaults().list,
+        );
+        assert!(render_lines(&view, /*width*/ 80).contains("Configure Status Line Row 3"));
+        view.handle_key_event(crossterm::event::KeyCode::Enter.into());
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(AppEvent::StatusLineSetup {
+                items,
+                use_theme_colors: false,
+                row: Some(2),
+            }) if items == vec![StatusLineItem::ModelName]
+        ));
+    }
+
+    #[test]
     fn picker_previews_the_pr_link_and_preserves_the_color_preference() {
         let url = "https://example.com/pr/42";
         for use_theme_colors in [false, true] {
@@ -746,6 +779,7 @@ mod tests {
             preview.pull_request_url = Some(url.to_owned());
             let mut view = StatusLineSetupView::new(
                 Some(&[StatusLineItem::PullRequestNumber.to_string()]),
+                /*row*/ None,
                 use_theme_colors,
                 StatuslineProviderActions::Hidden,
                 preview,
@@ -771,6 +805,7 @@ mod tests {
                 StatusLineItem::CurrentDir.to_string(),
                 StatusLineItem::GitBranch.to_string(),
             ]),
+            /*row*/ None,
             /*use_theme_colors*/ true,
             StatuslineProviderActions::Hidden,
             StatusSurfacePreviewData::from_iter([
@@ -806,6 +841,7 @@ mod tests {
                 StatusLineItem::ThreadCredits.to_string(),
                 StatusLineItem::EstimatedThreadCost.to_string(),
             ]),
+            /*row*/ None,
             /*use_theme_colors*/ true,
             StatuslineProviderActions::Hidden,
             StatusSurfacePreviewData::from_iter([
@@ -833,6 +869,7 @@ mod tests {
                 StatusLineItem::Hostname.to_string(),
                 StatusLineItem::CurrentDir.to_string(),
             ]),
+            /*row*/ None,
             /*use_theme_colors*/ true,
             StatuslineProviderActions::Hidden,
             StatusSurfacePreviewData::from_iter([

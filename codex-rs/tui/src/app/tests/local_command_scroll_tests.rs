@@ -134,6 +134,7 @@ async fn settings_picker_save_failures_reveal_their_errors() -> Result<()> {
         AppEvent::StatusLineSetup {
             items: vec![],
             use_theme_colors: false,
+            row: None,
         },
         AppEvent::TerminalTitleSetup { items: vec![] },
         AppEvent::PersistModelSelection {

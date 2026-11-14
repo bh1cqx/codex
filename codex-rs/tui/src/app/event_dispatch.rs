@@ -69,6 +69,7 @@ impl App {
                     | AppEvent::ChooseStatuslineProvider { .. }
                     | AppEvent::CreateCustomStatusline { .. }
                     | AppEvent::StatuslinePicker { .. }
+                    | AppEvent::StatusLineRowSelected { .. }
                     | AppEvent::StatusLineSetupCancelled
                     | AppEvent::TerminalTitleSetup { .. }
                     | AppEvent::TerminalTitleSetupPreview { .. }
@@ -3995,20 +3996,10 @@ impl App {
             AppEvent::StatusLineSetup {
                 items,
                 use_theme_colors,
+                row,
             } => {
-                let ids = items.iter().map(ToString::to_string).collect::<Vec<_>>();
-                let items_edit = crate::legacy_core::config::edit::status_line_items_edit(&ids);
-                let colors_edit =
-                    crate::legacy_core::config::edit::status_line_use_colors_edit(use_theme_colors);
-                let apply_result = ConfigEditsBuilder::for_config_path(self.local_settings.user_config_path.as_path())
-                    .with_edits([items_edit, colors_edit])
-                    .apply()
-                    .await;
-                match apply_result {
+                match self.save_status_line(items, use_theme_colors, row).await {
                     Ok(()) => {
-                        self.local_settings.tui.status_line = Some(ids.clone());
-                        self.local_settings.tui.status_line_use_colors = use_theme_colors;
-                        self.chat_widget.setup_status_line(items, use_theme_colors);
                         self.chat_widget.refresh_config_panel(/*notice*/ None);
                     }
                     Err(err) => {
@@ -4019,6 +4010,9 @@ impl App {
                         self.chat_widget.report_config_save_error(message);
                     }
                 }
+            }
+            AppEvent::StatusLineRowSelected { row } => {
+                self.chat_widget.open_status_line_setup_row(Some(row));
             }
             AppEvent::StatusLineBranchUpdated { cwd, branch } => {
                 self.chat_widget.set_status_line_branch(cwd, branch);

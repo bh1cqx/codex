@@ -128,8 +128,24 @@ impl ChatWidget {
         );
         let ids = items.iter().map(ToString::to_string).collect::<Vec<_>>();
         self.config_panel_tui.status_line = Some(ids.clone());
+        self.config_panel_tui.status_line_rows = None;
         self.config_panel_tui.status_line_use_colors = use_theme_colors;
         self.local_settings.tui.status_line = Some(ids);
+        self.local_settings.tui.status_line_rows = None;
+        self.local_settings.tui.status_line_use_colors = use_theme_colors;
+        self.status_surface_overrides.status_line = None;
+        self.status_surface_overrides.status_line_use_colors = None;
+        self.refresh_status_line();
+    }
+
+    pub(crate) fn setup_status_line_rows(
+        &mut self,
+        rows: Vec<Vec<String>>,
+        use_theme_colors: bool,
+    ) {
+        self.config_panel_tui.status_line_rows = Some(rows.clone());
+        self.config_panel_tui.status_line_use_colors = use_theme_colors;
+        self.local_settings.tui.status_line_rows = Some(rows);
         self.local_settings.tui.status_line_use_colors = use_theme_colors;
         self.status_surface_overrides.status_line = None;
         self.status_surface_overrides.status_line_use_colors = None;
@@ -329,9 +345,61 @@ impl ChatWidget {
     }
 
     pub(super) fn open_status_line_setup(&mut self) {
+        if let Some(rows) = &self.local_settings.tui.status_line_rows {
+            if rows.len() == 1 {
+                self.open_status_line_setup_row(Some(0));
+                return;
+            }
+            if rows.len() > 1 {
+                let items = rows
+                    .iter()
+                    .enumerate()
+                    .map(|(row, items)| SelectionItem {
+                        name: format!("Row {}", row + 1),
+                        description: Some(items.join(" · ")),
+                        actions: vec![Box::new(move |tx| {
+                            tx.send(AppEvent::StatusLineRowSelected { row });
+                        })],
+                        dismiss_parent_on_child_accept: true,
+                        ..Default::default()
+                    })
+                    .collect();
+                self.bottom_pane.show_selection_view(SelectionViewParams {
+                    allow_input_when_disconnected: true,
+                    title: Some("Configure Status Line".to_string()),
+                    subtitle: Some("Choose a row to edit.".to_string()),
+                    items,
+                    on_cancel: Some(Box::new(|tx| {
+                        tx.send(AppEvent::StatusLineSetupCancelled);
+                    })),
+                    ..SelectionViewParams::picker()
+                });
+                return;
+            }
+        }
+        self.open_status_line_setup_row(/*row*/ None);
+    }
+
+    pub(crate) fn open_status_line_setup_row(&mut self, row: Option<usize>) {
+        let configured_status_line_items = if let Some(row) = row {
+            let Some(items) = self
+                .local_settings
+                .tui
+                .status_line_rows
+                .as_ref()
+                .and_then(|rows| rows.get(row))
+            else {
+                self.add_error_message(
+                    "Status line row no longer exists. Reopen /statusline.".to_string(),
+                );
+                return;
+            };
+            items.clone()
+        } else {
+            self.configured_status_line_items()
+        };
         use crate::bottom_pane::StatuslineProviderActions;
 
-        let configured_status_line_items = self.configured_status_line_items();
         let providers = if !self.custom_statusline_enabled() {
             StatuslineProviderActions::Hidden
         } else if self.thread_params_mode == crate::ThreadParamsMode::Cloud {
@@ -344,6 +412,7 @@ impl ChatWidget {
         };
         let view = StatusLineSetupView::new(
             Some(configured_status_line_items.as_slice()),
+            row,
             self.local_settings.tui.status_line_use_colors,
             providers,
             self.status_surface_preview_data(),

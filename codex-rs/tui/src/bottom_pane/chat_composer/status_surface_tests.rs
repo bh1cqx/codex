@@ -24,6 +24,66 @@ fn composer() -> ChatComposer {
 }
 
 #[test]
+fn status_line_rows_keep_all_rows_with_agent_labels_in_both_screen_modes() {
+    let mut composer = composer();
+    composer.set_status_line(Some(
+        ["model", "usage", "branch", "thread"]
+            .map(HyperlinkLine::from)
+            .to_vec()
+            .into(),
+    ));
+    composer.set_active_agent_label(Some("agent".to_string()));
+    for separate_status_line in [false, true] {
+        for unfocused in [false, true] {
+            let options = ComposerRenderOptions {
+                separate_status_line,
+                unfocused,
+                max_height: Some(20),
+                ..Default::default()
+            };
+            let height = composer.desired_height_with_options(/*width*/ 80, options);
+            let (_, rows) = render_status(
+                &composer,
+                Rect::new(/*x*/ 0, /*y*/ 0, /*width*/ 80, height),
+                options,
+            );
+            assert_eq!(
+                rows,
+                vec![
+                    if unfocused { "model" } else { "model · agent" },
+                    "usage",
+                    "branch",
+                    "thread",
+                ]
+            );
+        }
+        let options = ComposerRenderOptions {
+            separate_status_line,
+            max_height: Some(6),
+            ..Default::default()
+        };
+        let area = Rect::new(
+            /*x*/ 0, /*y*/ 0, /*width*/ 80, /*height*/ 6,
+        );
+        let (_, rows) = render_status(&composer, area, options);
+        assert_eq!(rows, vec!["model · agent", "usage…"]);
+        let layout = composer.layout_with_options(area, options);
+        let cursor = composer.cursor_pos_with_options(area, options).unwrap();
+        assert!(cursor.1 < layout.status.y);
+    }
+
+    composer.set_active_reasoning_effort(
+        Some(&ReasoningEffort::High),
+        /*animations_enabled*/ true,
+    );
+    composer.set_active_reasoning_effort(
+        Some(&ReasoningEffort::Max),
+        /*animations_enabled*/ true,
+    );
+    assert!(composer.effort_status_line_transition.is_none());
+}
+
+#[test]
 fn extension_status_line_clips_links_to_footer_layout() {
     let mut composer = composer();
     let tree: crate::ui_tree::UiTree = r#"{

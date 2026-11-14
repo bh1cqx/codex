@@ -208,6 +208,8 @@
 //! Repeated selections do not restart either effect, dropping below Max clears them, and
 //! restoration clears any transition queued while replaying the saved session. Rendering advances
 //! active transitions through the frame requester until they finish.
+//! Explicit status rows retain their boundaries and skip single-line transitions. Footer layout
+//! reserves their height after the input and required hints, clipping rows when space runs out.
 //!
 //! # Astra Sparkle Eligibility
 //!

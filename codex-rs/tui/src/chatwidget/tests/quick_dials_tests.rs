@@ -5,6 +5,19 @@ use crate::chatwidget::quick_dials::QuickDialEditorTarget;
 use codex_config::types::QuickDial;
 
 #[tokio::test]
+async fn status_line_rows_cannot_be_silently_flattened_into_a_preset() {
+    let (mut chat, _events, _ops) = make_chatwidget_manual(Some("gpt-5.5")).await;
+    chat.local_settings.tui.status_line_rows = Some(vec![
+        vec!["model".to_string()],
+        vec!["git-branch".to_string()],
+    ]);
+    assert_eq!(
+        chat.current_status_line_quick_dial(),
+        Err("Status line presets support a single line. Edit rows with /statusline.")
+    );
+}
+
+#[tokio::test]
 async fn current_settings_offer_model_permissions_and_status_layouts() {
     let (mut chat, mut events, _ops) =
         make_chatwidget_manual(/*model_override*/ Some("gpt-5.5")).await;

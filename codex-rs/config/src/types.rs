@@ -1022,6 +1022,11 @@ pub struct Tui {
     /// Local status line selection. Set to "default" for built-in items or specify an MCP server and tool.
     pub status_line_provider: Option<Box<StatusLineSelection>>,
 
+    /// Explicit status rows, each containing an ordered list of item identifiers.
+    /// Overrides `status_line` when set. Empty or unavailable rows are omitted.
+    /// Each row is truncated to the terminal width without wrapping.
+    pub status_line_rows: Option<Vec<Vec<String>>>,
+
     /// Color status line items with colors derived from the active syntax theme.
     /// Defaults to `true`.
     #[serde(default = "default_true")]

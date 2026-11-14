@@ -34,6 +34,7 @@ pub(crate) struct StatusLine(StatusContent);
 #[derive(Clone, Debug, PartialEq)]
 enum StatusContent {
     Native(CachedLayout<Box<HyperlinkLine>, Option<Vec<HyperlinkLine>>>),
+    NativeRows(Vec<HyperlinkLine>),
     Extension(CachedLayout<Arc<PreparedUiTree>, u16>),
 }
 
@@ -96,6 +97,12 @@ impl From<HyperlinkLine> for StatusLine {
     }
 }
 
+impl From<Vec<HyperlinkLine>> for StatusLine {
+    fn from(rows: Vec<HyperlinkLine>) -> Self {
+        Self(StatusContent::NativeRows(rows))
+    }
+}
+
 impl From<Line<'static>> for StatusLine {
     fn from(line: Line<'static>) -> Self {
         Self::from(HyperlinkLine::from(line))
@@ -112,7 +119,29 @@ impl StatusLine {
     pub(crate) fn as_native(&self) -> Option<&HyperlinkLine> {
         match &self.0 {
             StatusContent::Native(native) => Some(&native.content),
+            StatusContent::NativeRows(_) | StatusContent::Extension(_) => None,
+        }
+    }
+
+    pub(super) fn first_native_row_mut(&mut self) -> Option<&mut HyperlinkLine> {
+        match &mut self.0 {
+            StatusContent::Native(native) => {
+                *native.layout.get_mut() = None;
+                Some(&mut native.content)
+            }
+            StatusContent::NativeRows(rows) => rows.first_mut(),
             StatusContent::Extension(_) => None,
+        }
+    }
+
+    pub(super) fn is_extension(&self) -> bool {
+        matches!(&self.0, StatusContent::Extension(_))
+    }
+
+    pub(crate) fn explicit_row_count(&self) -> Option<u16> {
+        match &self.0 {
+            StatusContent::NativeRows(rows) => Some(rows.len().try_into().unwrap_or(u16::MAX)),
+            _ => None,
         }
     }
 
@@ -126,6 +155,7 @@ impl StatusLine {
                 || u16::from(native.content.width() > 0),
                 |rows| rows.len().max(1).min(usize::from(bounds.height)) as u16,
             ),
+            StatusContent::NativeRows(rows) => rows.len().min(usize::from(bounds.height)) as u16,
             StatusContent::Extension(extension) => {
                 *extension.get(bounds, |tree| tree.measure(bounds).height)
             }
@@ -137,28 +167,22 @@ impl StatusLine {
         if area.is_empty() {
             return;
         }
-        match &self.0 {
+        let wrapped;
+        let rows = match &self.0 {
             StatusContent::Native(native) => {
-                let wrapped = wrapped_rows(native, area.as_size());
-                let rows = wrapped
-                    .as_deref()
-                    .unwrap_or_else(|| std::slice::from_ref(native.content.as_ref()));
-                let more_rows = rows.len() > usize::from(area.height);
-                for (row, line) in area.rows().zip(rows) {
-                    render_status_row(
-                        line,
-                        row,
-                        buf,
-                        focus,
-                        more_rows && row.bottom() == area.bottom(),
-                    );
-                }
+                wrapped = wrapped_rows(native, area.as_size());
+                wrapped.as_deref().unwrap_or_else(|| std::slice::from_ref(native.content.as_ref()))
             }
+            StatusContent::NativeRows(rows) => rows.as_slice(),
             StatusContent::Extension(extension) => {
-                let plain_style =
-                    (focus == StatusLineFocus::Unfocused).then(|| Style::reset().dim());
+                let plain_style = (focus == StatusLineFocus::Unfocused).then(|| Style::reset().dim());
                 with_syntax_theme(|theme| extension.content.render(area, theme, buf, plain_style));
+                return;
             }
+        };
+        let more_rows = rows.len() > usize::from(area.height);
+        for (row, line) in area.rows().zip(rows) {
+            render_status_row(line, row, buf, focus, more_rows && row.bottom() == area.bottom());
         }
     }
 }
