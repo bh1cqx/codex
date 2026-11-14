@@ -102,7 +102,7 @@ impl ChatComposer {
             return use_status(None);
         }
         let status = self.footer.status_line_value.as_ref();
-        if status.is_some_and(|status| status.as_native().is_none())
+        if status.is_some_and(StatusLine::is_extension)
             || self.footer.active_agent_label.is_none()
             || focus == StatusLineFocus::Unfocused
         {

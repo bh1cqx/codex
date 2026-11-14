@@ -191,20 +191,44 @@ impl ChatWidget {
             return;
         }
 
-        let mut segments = Vec::new();
-        for item in &selections.status_line_items {
-            if let Some(value) = self.status_line_value_for_item(*item) {
-                segments.push((*item, value));
+        let item_rows = self
+            .local_settings
+            .tui
+            .status_line_rows
+            .as_ref()
+            .map(|rows| {
+                rows.iter()
+                    .map(|row| {
+                        row.iter()
+                            .filter_map(|id| id.parse::<StatusLineItem>().ok())
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| vec![selections.status_line_items.clone()]);
+        let mut lines = Vec::new();
+        for items in item_rows {
+            let mut segments = Vec::new();
+            for item in items {
+                if let Some(value) = self.status_line_value_for_item(item) {
+                    segments.push((item, value));
+                }
+            }
+            if let Some(line) = status_line_from_segments(
+                segments,
+                self.local_settings.tui.status_line_use_colors,
+                self.thread_id,
+                self.status_line_pull_request_url(),
+            ) {
+                lines.push(line);
             }
         }
-
-        let line = status_line_from_segments(
-            segments,
-            self.local_settings.tui.status_line_use_colors,
-            self.thread_id,
-            self.status_line_pull_request_url(),
-        );
-        self.set_status_line(line.map(Into::into));
+        let status = if self.local_settings.tui.status_line_rows.is_some() {
+            (!lines.is_empty()).then(|| lines.into())
+        } else {
+            lines.into_iter().next().map(Into::into)
+        };
+        self.set_status_line(status);
     }
 
     /// Clears the terminal title Codex most recently wrote, if any.
@@ -454,6 +478,9 @@ impl ChatWidget {
     }
 
     pub(super) fn configured_status_line_items(&self) -> Vec<String> {
+        if let Some(rows) = &self.local_settings.tui.status_line_rows {
+            return rows.iter().flatten().cloned().collect();
+        }
         self.local_settings
             .tui
             .status_line

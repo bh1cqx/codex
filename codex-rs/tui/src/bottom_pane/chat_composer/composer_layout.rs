@@ -33,9 +33,13 @@ impl FooterLayout {
         workspace_height: Option<u16>,
         wanted_hints: u16,
         priority_hint_rows: u16,
+        explicit_status_rows: Option<u16>,
     ) -> Self {
         Self {
-            cap: workspace_height.map_or(2, |height| (height.saturating_add(2) / 4).clamp(2, 4)),
+            cap: explicit_status_rows.map_or_else(
+                || workspace_height.map_or(2, |height| (height.saturating_add(2) / 4).clamp(2, 4)),
+                |rows| rows.saturating_add(wanted_hints),
+            ),
             wanted_hints,
             reserved_hints: wanted_hints.min(priority_hint_rows),
         }
@@ -301,6 +305,11 @@ impl ChatComposer {
             workspace_height,
             self.footer_hint_height(width, options),
             /*priority_hint_rows*/ if find_active { 2 } else { 1 },
+            self.footer
+                .status_line_value
+                .as_ref()
+                .filter(|_| self.footer.status_line_enabled)
+                .and_then(StatusLine::explicit_row_count),
         );
         let wanted_status =
             self.status_surface_height(footer.status_bounds(width, available), options);

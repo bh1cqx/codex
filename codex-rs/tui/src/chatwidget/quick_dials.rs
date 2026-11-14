@@ -159,6 +159,9 @@ impl ChatWidget {
     }
 
     pub(super) fn current_status_line_quick_dial(&self) -> Result<QuickDial, &'static str> {
+        if self.local_settings.tui.status_line_rows.is_some() {
+            return Err("Status line presets support a single line. Edit rows with /statusline.");
+        }
         let colors = if self.local_settings.tui.status_line_use_colors {
             "--colors"
         } else {

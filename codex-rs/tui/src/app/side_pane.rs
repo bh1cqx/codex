@@ -8,6 +8,7 @@ use super::sidebar::PaneFocus;
 use super::sidebar::SidebarContent;
 use super::sidebar::SidebarLayout;
 use crate::bottom_pane::FooterLayout;
+use crate::bottom_pane::StatusLine;
 use crate::bottom_pane::StatusLineFocus;
 use crate::custom_terminal::Frame;
 use crate::legacy_core::config::edit::ConfigEdit;
@@ -476,6 +477,11 @@ impl SidePaneLayout {
             Some(composer_height_limit(area.height)),
             hint_rows,
             /*priority_hint_rows*/ hint_rows,
+            companion
+                .display
+                .status_line
+                .as_ref()
+                .and_then(StatusLine::explicit_row_count),
         );
         let status = companion
             .display

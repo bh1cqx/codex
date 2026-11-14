@@ -120,6 +120,18 @@ pub fn status_line_items_edit(items: &[String]) -> ConfigEdit {
     }
 }
 
+/// Sets the explicit status rows, including an empty array to hide the status line.
+pub fn status_line_rows_edit(rows: &[Vec<String>]) -> ConfigEdit {
+    let array = rows
+        .iter()
+        .map(|row| toml_edit::Value::Array(row.iter().cloned().collect()))
+        .collect::<toml_edit::Array>();
+    ConfigEdit::SetPath {
+        segments: vec!["tui".to_string(), "status_line_rows".to_string()],
+        value: TomlItem::Value(array.into()),
+    }
+}
+
 /// Produces a config edit that sets `[tui].status_line_use_colors`.
 pub fn status_line_use_colors_edit(enabled: bool) -> ConfigEdit {
     ConfigEdit::SetPath {

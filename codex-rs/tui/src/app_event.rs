@@ -1920,6 +1920,11 @@ pub(crate) enum AppEvent {
     StatusLineSetup {
         items: Vec<StatusLineItem>,
         use_theme_colors: bool,
+        row: Option<usize>,
+    },
+    /// Open the item picker for one configured status row.
+    StatusLineRowSelected {
+        row: usize,
     },
     /// Dismiss the status-line setup UI without changing config.
     StatusLineSetupCancelled,

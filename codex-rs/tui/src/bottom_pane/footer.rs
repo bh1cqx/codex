@@ -807,24 +807,20 @@ pub(crate) fn passive_footer_status_line(props: &FooterProps) -> Option<StatusLi
         .status_line_value
         .as_ref()
         .filter(|_| props.status_line_enabled);
-    let mut line = if let Some(status) = status {
-        let Some(line) = status.as_native() else {
-            return Some(status.clone());
-        };
-        line.clone()
-    } else {
-        HyperlinkLine::default()
-    };
     let suffix = passive_footer_suffix(props, status.is_some());
     if status.is_none() && suffix.spans.is_empty() {
         return None;
     }
+    let mut status = status.cloned().unwrap_or_else(|| HyperlinkLine::default().into());
+    let Some(line) = status.first_native_row_mut() else {
+        return Some(status);
+    };
     if line.width() > 0 && suffix.width() > 0 {
         line.line
             .push_span(STATUS_LINE_SEPARATOR.set_style(secondary_text_style()));
     }
     line.line.spans.extend(suffix.spans);
-    Some(line.into())
+    Some(status)
 }
 
 fn passive_footer_suffix(props: &FooterProps, has_status: bool) -> Line<'static> {

@@ -3256,6 +3256,67 @@ async fn repeated_generic_warning_is_not_hidden() {
 }
 
 #[tokio::test]
+async fn status_line_rows_override_the_fallback_and_omit_unavailable_rows() {
+    use crate::bottom_pane::StatusLineFocus;
+
+    let (mut chat, mut rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.thread_id = Some(ThreadId::new());
+    chat.local_settings.tui.status_line = Some(vec!["model".to_string()]);
+    chat.local_settings.tui.status_line_rows = Some(vec![
+        vec!["thread-name".to_string()],
+        vec![],
+        vec!["bad-item".to_string()],
+        vec!["codex-version".to_string(), "codex-version".to_string()],
+        vec!["bad-item".to_string()],
+    ]);
+    let version = crate::version::CODEX_CLI_VERSION;
+    for (name, expected) in [
+        (
+            Some("test-thread"),
+            vec!["test-thread".to_string(), format!("{version} · {version}")],
+        ),
+        (None, vec![format!("{version} · {version}")]),
+    ] {
+        chat.thread_name = name.map(str::to_string);
+        chat.refresh_status_line();
+        let status = chat.status_line_content().unwrap();
+        let area = Rect::new(
+            /*x*/ 0,
+            /*y*/ 0,
+            /*width*/ 80,
+            expected.len() as u16,
+        );
+        let mut buffer = Buffer::empty(area);
+        assert_eq!(status.height(area.as_size()), area.height);
+        status.render(area, &mut buffer, StatusLineFocus::Focused);
+        let rows = (0..area.height)
+            .map(|y| {
+                (0..area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rows, expected);
+    }
+    let warnings = drain_insert_history_transcript(&mut rx);
+    assert_eq!(warnings.len(), 1);
+    let warning = lines_to_single_string(&warnings[0]);
+    assert!(
+        warning.contains(r#"Ignored invalid status line item: "bad-item"."#),
+        "{warning}"
+    );
+
+    chat.local_settings.tui.status_line_rows = Some(vec![]);
+    chat.refresh_status_line();
+    assert!(chat.status_line_content().is_none());
+    chat.local_settings.tui.status_line_rows = None;
+    chat.refresh_status_line();
+    assert!(chat.status_line_text().is_some());
+}
+
+#[tokio::test]
 async fn status_line_invalid_items_warn_once() {
     let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.local_settings.tui.status_line = Some(vec![

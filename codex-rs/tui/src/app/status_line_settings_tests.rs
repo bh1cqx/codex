@@ -181,3 +181,107 @@ async fn reloading_the_local_provider_preserves_the_server_feature_gate() {
     app.refresh_in_memory_config_from_disk().await.unwrap();
     assert!(render_bottom_popup(&app.chat_widget, /*width*/ 80).contains("Initializing…"));
 }
+
+#[tokio::test]
+async fn status_line_rows_save_one_row_and_preserve_the_fallback() -> anyhow::Result<()> {
+    use crate::bottom_pane::StatusLineItem;
+
+    let mut app = make_test_app().await;
+    let path = app.local_settings.user_config_path.clone();
+    std::fs::write(
+        &path,
+        r#"[tui]
+theme = "nord"
+status_line = ["codex-version"]
+status_line_rows = [["model", "reasoning"], ["git-branch"]]
+"#,
+    )?;
+    app.refresh_in_memory_config_from_disk()
+        .await
+        .expect("load status line rows");
+    app.chat_widget.local_settings = app.local_settings.clone();
+    app.save_status_line(
+        vec![StatusLineItem::ContextUsed],
+        /*use_theme_colors*/ false,
+        Some(1),
+    )
+    .await?;
+    let expected = toml::toml! {
+        [tui]
+        theme = "nord"
+        status_line = ["codex-version"]
+        status_line_rows = [["model", "reasoning"], ["context-used"]]
+        status_line_use_colors = false
+    };
+    let saved: toml::Table = toml::from_str(&std::fs::read_to_string(&path)?)?;
+    assert_eq!(saved, expected);
+    let rows = Some(vec![
+        vec!["model".to_string(), "reasoning".to_string()],
+        vec!["context-used".to_string()],
+    ]);
+    assert_eq!(app.local_settings.tui.status_line_rows, rows);
+    assert_eq!(app.chat_widget.local_settings.tui.status_line_rows, rows);
+    assert_eq!(app.chat_widget.config_panel_tui.status_line_rows, rows);
+    app.refresh_in_memory_config_from_disk()
+        .await
+        .expect("reload saved status line rows");
+    assert_eq!(app.local_settings.tui.status_line_rows, rows);
+    assert_eq!(app.config.tui_status_line_rows, rows);
+
+    app.save_status_line(
+        Vec::new(),
+        /*use_theme_colors*/ true,
+        /*row*/ None,
+    )
+    .await?;
+    let saved: toml::Table = toml::from_str(&std::fs::read_to_string(&path)?)?;
+    assert_eq!(
+        saved,
+        toml::toml! {
+            [tui]
+            theme = "nord"
+            status_line = []
+            status_line_use_colors = true
+        }
+    );
+    assert_eq!(app.chat_widget.local_settings.tui.status_line_rows, None);
+    assert_eq!(app.chat_widget.local_settings.tui.status_line, Some(vec![]));
+    Ok(())
+}
+
+#[tokio::test]
+async fn status_line_rows_failed_saves_leave_file_and_live_settings_unchanged() -> anyhow::Result<()>
+{
+    use crate::bottom_pane::StatusLineItem;
+
+    let mut app = make_test_app().await;
+    let path = app.local_settings.user_config_path.clone();
+    let contents = "[tui]\nstatus_line_rows = [['model'], ['git-branch']]\n";
+    std::fs::write(&path, contents)?;
+    app.refresh_in_memory_config_from_disk()
+        .await
+        .expect("load status line rows");
+    app.chat_widget.local_settings = app.local_settings.clone();
+    let before = (
+        app.local_settings.clone(),
+        app.chat_widget.local_settings.clone(),
+    );
+    for (text, row) in [(contents, 2), ("[malformed", 1)] {
+        std::fs::write(&path, text)?;
+        assert!(
+            app.save_status_line(
+                vec![StatusLineItem::ContextUsed],
+                /*use_theme_colors*/ false,
+                Some(row),
+            )
+            .await
+            .is_err()
+        );
+        assert_eq!(std::fs::read_to_string(&path)?, text);
+        assert_eq!(
+            (&app.local_settings, &app.chat_widget.local_settings),
+            (&before.0, &before.1)
+        );
+    }
+    Ok(())
+}

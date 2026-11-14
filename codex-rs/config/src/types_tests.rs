@@ -2,6 +2,43 @@ use super::*;
 use pretty_assertions::assert_eq;
 
 #[test]
+fn status_line_rows_round_trip_without_changing_the_single_line_fallback() {
+    let config = r#"
+status_line = ["model"]
+status_line_rows = [["model-with-reasoning", "git-branch"], [], ["context-used"]]
+"#;
+    let tui: Tui = toml::from_str(config).unwrap();
+    assert_eq!(tui.status_line, Some(vec!["model".to_string()]));
+    assert_eq!(
+        tui.status_line_rows,
+        Some(vec![
+            vec!["model-with-reasoning".to_string(), "git-branch".to_string()],
+            vec![],
+            vec!["context-used".to_string()],
+        ])
+    );
+    let round_trip: Tui = toml::from_str(&toml::to_string(&tui).unwrap()).unwrap();
+    assert_eq!(round_trip, tui);
+
+    let legacy: Tui = toml::from_str(r#"status_line = ["model"]"#).unwrap();
+    assert_eq!(legacy.status_line_rows, None);
+    let hidden: Tui = toml::from_str("status_line_rows = []").unwrap();
+    assert_eq!(hidden.status_line_rows, Some(vec![]));
+}
+
+#[test]
+fn status_line_rows_rejects_invalid_row_shapes() {
+    for value in [
+        r#"["model"]"#,
+        r#"[["model"], "git-branch"]"#,
+        r#"[["model", 1]]"#,
+        r#"[[["model"]]]"#,
+    ] {
+        assert!(toml::from_str::<Tui>(&format!("status_line_rows = {value}")).is_err());
+    }
+}
+
+#[test]
 fn plugin_activation_inherits_defaults_without_explicit_enablement() {
     for default_enabled in [None, Some(false), Some(true)] {
         let default_config = default_enabled.map_or_else(String::new, |enabled| {

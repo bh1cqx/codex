@@ -5916,6 +5916,16 @@
           ],
           "description": "Local status line selection. Set to \"default\" for built-in items or specify an MCP server and tool."
         },
+        "status_line_rows": {
+          "description": "Explicit status rows, each containing an ordered list of item identifiers. Overrides `status_line` when set. Empty or unavailable rows are omitted. Each row is truncated to the terminal width without wrapping.",
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
         "status_line_use_colors": {
           "default": true,
           "description": "Color status line items with colors derived from the active syntax theme. Defaults to `true`.",
