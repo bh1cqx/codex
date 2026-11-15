@@ -111,6 +111,18 @@ pub(crate) fn history_prompt_style() -> Style {
     Style::default().bg(best_color(blend(foreground, background, alpha)))
 }
 
+pub(crate) fn status_header_style() -> Style {
+    let surface = history_prompt_style();
+    let Some(background) = background_rgb(surface.bg) else {
+        return surface;
+    };
+    surface.bg(best_color(blend(
+        (255, 255, 255),
+        background,
+        /*alpha*/ 0.08,
+    )))
+}
+
 // These grays are exact entries in the xterm extended palette and have 8.4:1 contrast.
 // On terminals with only theme-defined colors, use the terminal's own foreground and background.
 fn history_prompt_fallback(level: StdoutColorLevel) -> Style {
