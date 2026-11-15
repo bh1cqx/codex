@@ -129,51 +129,35 @@ async fn status_header_tracks_current_thread_and_branch_without_changing_footer(
 
 #[tokio::test]
 async fn status_header_reserves_one_row_and_yields_to_the_composer() {
-    use crate::bottom_pane::CommandPopupPlacement;
-    use crate::bottom_pane::ComposerRenderOptions;
+    let (mut widget, _sender, _events, _operations) = make_chatwidget_manual_with_sender().await;
+    widget.local_settings.tui.terminal_title = Some(vec![]);
+    widget.local_settings.tui.status_line = Some(vec![]);
+    widget.thread_name = Some("Header for this session".into());
+    widget.handle_paste("draft stays editable".into());
+    widget.refresh_status_surfaces();
+    let width = 80;
+    let height = widget.as_renderable().desired_height(width);
+    let render = |widget: &ChatWidget, height| {
+        let area = Rect::new(/*x*/ 3, /*y*/ 7, width, height);
+        let content = widget.as_renderable();
+        let mut buffer = Buffer::empty(area);
+        content.render(area, &mut buffer);
+        (buffer, content.cursor_pos(area), content.cursor_style(area))
+    };
+    let before = render(&widget, height);
+    let (cursor_x, cursor_y) = before.1.expect("editable composer");
 
-    for placement in [
-        CommandPopupPlacement::AboveComposer,
-        CommandPopupPlacement::Overlay,
-    ] {
-        let (mut widget, _sender, _events, _operations) =
-            make_chatwidget_manual_with_sender().await;
-        widget.local_settings.tui.terminal_title = Some(vec![]);
-        widget.local_settings.tui.status_line = Some(vec![]);
-        widget.thread_name = Some("Header for this session".into());
-        widget.handle_paste("draft stays editable".into());
-        widget.refresh_status_surfaces();
-        let options = ComposerRenderOptions {
-            command_popup_placement: placement,
-            ..Default::default()
-        };
-        let width = 80;
-        let height = widget.bottom_pane_renderable(options).desired_height(width);
-        let render = |widget: &ChatWidget, height| {
-            let area = Rect::new(/*x*/ 3, /*y*/ 7, width, height);
-            let content = widget.bottom_pane_renderable(options);
-            let mut buffer = Buffer::empty(area);
-            content.render(area, &mut buffer);
-            (buffer, content.cursor_pos(area), content.cursor_style(area))
-        };
-        let before = render(&widget, height);
-        let (cursor_x, cursor_y) = before.1.expect("editable composer");
+    widget.local_settings.tui.status_header = Some(vec!["thread-name".into()]);
+    widget.refresh_status_surfaces();
+    assert_eq!(widget.as_renderable().desired_height(width), height + 1);
+    let after = render(&widget, height + 1);
+    assert!(contains_text(&after.0, "Header for this session"));
+    assert!(contains_text(&after.0, "draft stays editable"));
+    assert_eq!(after.1, Some((cursor_x, cursor_y + 1)));
+    assert_eq!(after.2, before.2);
 
-        widget.local_settings.tui.status_header = Some(vec!["thread-name".into()]);
-        widget.refresh_status_surfaces();
-        assert_eq!(
-            widget.bottom_pane_renderable(options).desired_height(width),
-            height + 1
-        );
-        let after = render(&widget, height + 1);
-        assert!(contains_text(&after.0, "Header for this session"));
-        assert!(contains_text(&after.0, "draft stays editable"));
-        assert_eq!(after.1, Some((cursor_x, cursor_y + 1)));
-        assert_eq!(after.2, before.2);
-
-        let crowded = render(&widget, height);
-        assert_eq!(crowded, before);
-    }
+    let crowded = render(&widget, height);
+    assert_eq!(crowded, before);
 }
 
 #[tokio::test]
@@ -195,6 +179,32 @@ async fn status_header_does_not_cover_agent_or_selection_views() {
     let frame = render_frame(&widget, /*width*/ 80);
     assert!(contains_text(&frame, "Another session"));
     assert!(!contains_text(&frame, "Header must stay hidden"));
+}
+
+#[tokio::test]
+async fn status_header_compacts_context_without_changing_footer() {
+    let (mut widget, _sender, _events, _operations) = make_chatwidget_manual_with_sender().await;
+    widget.local_settings.tui.status_header = Some(vec!["context-used".into()]);
+    widget.local_settings.tui.status_line = Some(vec!["context-used".into()]);
+    widget.token_usage_pending = false;
+    for (total_tokens, header, footer) in [
+        (0, "ctx 0%", "Context 0% used"),
+        (12_700, "ctx 70%", "Context 70% used"),
+        (16_000, "ctx 100%", "Context 100% used"),
+    ] {
+        let usage = TokenUsage {
+            total_tokens,
+            ..Default::default()
+        };
+        widget.token_info = Some(TokenUsageInfo {
+            total_token_usage: usage.clone(),
+            last_token_usage: usage,
+            model_context_window: Some(13_000),
+        });
+        widget.refresh_status_surfaces();
+        assert_eq!(status_header_text(&widget).as_deref(), Some(header));
+        assert_eq!(widget.status_line_text().as_deref(), Some(footer));
+    }
 }
 
 #[tokio::test]

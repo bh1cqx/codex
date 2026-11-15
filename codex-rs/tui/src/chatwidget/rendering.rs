@@ -317,6 +317,9 @@ impl ChatWidget {
             None => RenderableItem::Owned(Box::new(())),
         };
         let mut flex = FlexRenderable::new();
+        if let Some(header) = self.status_header_renderable(/*unfocused*/ false) {
+            flex.push(/*flex*/ 1, RenderableItem::Owned(Box::new(header)));
+        }
         flex.push(/*flex*/ 1, active_cell_renderable);
         for cell in self
             .realtime_conversation
@@ -356,35 +359,15 @@ impl ChatWidget {
         RenderableItem::Owned(Box::new(flex))
     }
 
-    /// Returns the status header, composer, footer, and active modal without live transcript.
-    ///
-    /// Both transcript surfaces use this composition so read-only notices and cursor placement
-    /// remain consistent. Owned transcripts reserve their shared hint row above the composer.
-    pub(crate) fn bottom_pane_renderable<'a>(
-        &'a self,
-        options: crate::bottom_pane::ComposerRenderOptions<'a>,
-    ) -> RenderableItem<'a> {
-        let content = self.bottom_pane_content_renderable(options);
-        let Some(header) = self
-            .status_header
+    pub(crate) fn status_header_renderable(&self, unfocused: bool) -> Option<impl Renderable + '_> {
+        self.status_header
             .as_ref()
             .filter(|_| !self.bottom_pane.has_active_view())
-        else {
-            return content;
-        };
-        let mut column = FlexRenderable::new();
-        column.push(
-            /*flex*/ 1,
-            RenderableItem::Owned(Box::new(StatusHeader {
-                content: header,
-                unfocused: options.unfocused,
-            })),
-        );
-        column.push(/*flex*/ 0, content);
-        RenderableItem::Owned(Box::new(column))
+            .map(|content| StatusHeader { content, unfocused })
     }
 
-    fn bottom_pane_content_renderable<'a>(
+    /// Returns the composer, footer, and active modal without transcript or status header.
+    pub(crate) fn bottom_pane_renderable<'a>(
         &'a self,
         mut options: crate::bottom_pane::ComposerRenderOptions<'a>,
     ) -> RenderableItem<'a> {
