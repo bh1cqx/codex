@@ -52,7 +52,7 @@ status_line_rows = [
 
 Fullscreen mode keeps the header at the top of chat view while the transcript scrolls. Selection views, including `/agents`, hide it. Inline mode places it above the live output. The header yields its row when the composer needs the space.
 
-The header uses a purple background across the full row, with label colors adjusted for contrast. It accepts the same item identifiers as the footer, with `context-used` shown as `ctx 42% ▰▰▱▱▱`. Each filled block represents 20% used. The meter turns yellow at 80% and bold red at 95% when status colors are enabled; it stays on the same row. Its selection is independent of `status_line` and `status_line_rows`. Unavailable items are omitted and long headers are truncated with an ellipsis.
+The header uses a purple tint across the full row: deep purple on dark terminals and light lavender on light terminals, preserving the item colors. Labels are adjusted for contrast where needed. It accepts the same item identifiers as the footer, with `context-used` shown as `ctx 42% ▰▰▱▱▱`. Each filled block represents 20% used. The meter turns yellow at 80% and bold red at 95% when status colors are enabled; it stays on the same row. Its selection is independent of `status_line` and `status_line_rows`. Unavailable items are omitted and long headers are truncated with an ellipsis.
 
 Remove `status_header` or set it to `[]` to hide it. Restart the TUI after editing the file. The setting stays local to this fork's TUI; it requires no daemon changes and uses the same session data as the official client.
 

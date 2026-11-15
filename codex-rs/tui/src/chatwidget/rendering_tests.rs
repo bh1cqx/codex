@@ -204,6 +204,54 @@ async fn status_header_does_not_cover_agent_or_selection_views() {
     assert!(!contains_text(&frame, "Header must stay hidden"));
 }
 
+#[test]
+fn status_header_preserves_distinct_readable_colors() {
+    let bright = [(125, 173, 237), (110, 196, 153), (222, 155, 228)];
+    for (fg, bg, colors) in [
+        ((230, 230, 230), (20, 20, 20), bright),
+        ((230, 230, 230), (48, 48, 48), bright),
+        (
+            (20, 20, 20),
+            (250, 250, 250),
+            [(28, 65, 112), (25, 84, 52), (101, 33, 92)],
+        ),
+    ] {
+        let content: StatusLine = Line::from(
+            ["M", "C", "B"]
+                .into_iter()
+                .zip(colors)
+                .map(|(label, color)| {
+                    Span::styled(
+                        label,
+                        Style::default().fg(crate::terminal_palette::rgb_color(color)),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        )
+        .into();
+        crate::terminal_palette::with_test_default_colors(
+            crate::terminal_probe::DefaultColors { fg, bg },
+            || {
+                let area = Rect::new(0, 0, 12, 1);
+                let mut buffer = Buffer::empty(area);
+                StatusHeader {
+                    content: &content,
+                    focus: StatusLineFocus::Focused,
+                }
+                .render(area, &mut buffer);
+                for (index, color) in colors.into_iter().enumerate() {
+                    let x = crate::ui_consts::LIVE_PREFIX_COLS + index as u16;
+                    assert_eq!(
+                        buffer[(x, 0)].fg,
+                        crate::terminal_palette::rgb_color(color),
+                        "label {index} on background {bg:?}"
+                    );
+                }
+            },
+        );
+    }
+}
+
 #[tokio::test]
 async fn status_header_context_meter_warns_near_capacity_without_changing_footer() {
     let (mut widget, _sender, _events, _operations) = make_chatwidget_manual_with_sender().await;
