@@ -158,6 +158,29 @@ async fn status_header_reserves_one_row_and_yields_to_the_composer() {
 
     let crowded = render(&widget, height);
     assert_eq!(crowded, before);
+
+    for (fg, bg) in [
+        ((230, 230, 230), (20, 20, 20)),
+        ((20, 20, 20), (250, 250, 250)),
+    ] {
+        let painted = crate::terminal_palette::with_test_default_colors(
+            crate::terminal_probe::DefaultColors { fg, bg },
+            || render(&widget, height + 1).0,
+        );
+        let header = painted.area.rows().next().expect("header row");
+        let background = painted[(header.x, header.y)].bg;
+        assert_ne!(background, ratatui::style::Color::Reset);
+        assert_ne!(background, ratatui::style::Color::Rgb(bg.0, bg.1, bg.2));
+        assert!(
+            header
+                .positions()
+                .all(|position| painted[position].bg == background)
+        );
+        assert_eq!(
+            painted[(header.x, header.bottom())].bg,
+            ratatui::style::Color::Reset
+        );
+    }
 }
 
 #[tokio::test]
