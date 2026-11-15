@@ -38,7 +38,7 @@ impl Renderable for StatusHeader<'_> {
         ));
         let focus = if self.unfocused { StatusLineFocus::Unfocused } else { StatusLineFocus::Focused };
         self.content.render(content_area, buf, focus);
-        let surface = crate::style::history_prompt_style();
+        let surface = crate::style::status_header_style();
         for position in header_area.positions() {
             let cell = &mut buf[position];
             let preferred = match cell.fg {
