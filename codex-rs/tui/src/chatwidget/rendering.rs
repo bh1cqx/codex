@@ -12,6 +12,7 @@ use crate::render::RectExt;
 use crate::terminal_hyperlinks::HyperlinkParagraph;
 use crate::wrapping::RtOptions;
 use crate::wrapping::word_wrap_lines;
+use ratatui::style::Color;
 use ratatui::style::Styled as _;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
@@ -24,18 +25,28 @@ struct StatusHeader<'a> {
 
 impl Renderable for StatusHeader<'_> {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        let area = area.inset(Insets::tlbr(
+        let header_area = Rect {
+            height: area.height.min(1),
+            ..area
+        };
+        let content_area = header_area.inset(Insets::tlbr(
             /*top*/ 0,
             /*left*/ crate::ui_consts::LIVE_PREFIX_COLS,
             /*bottom*/ 0,
             /*right*/ 0,
         ));
-        let area = Rect {
-            height: area.height.min(1),
-            ..area
-        };
         let focus = if self.unfocused { StatusLineFocus::Unfocused } else { StatusLineFocus::Focused };
-        self.content.render(area, buf, focus);
+        self.content.render(content_area, buf, focus);
+        let surface = crate::style::history_prompt_style();
+        for position in header_area.positions() {
+            let cell = &mut buf[position];
+            let preferred = match cell.fg {
+                Color::Reset => surface.fg.unwrap_or(Color::Reset),
+                foreground => foreground,
+            };
+            let foreground = crate::style::readable_color_on(preferred, surface.bg);
+            cell.set_style(surface.fg(foreground));
+        }
     }
 
     fn desired_height(&self, width: u16) -> u16 {
