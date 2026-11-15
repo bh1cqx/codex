@@ -103,6 +103,14 @@ pub(crate) struct KeymapActionId {
 }
 
 impl KeymapActionId {
+    pub(crate) fn is_conversation_navigation(self) -> bool {
+        self.context == KeymapContext::Global
+            && matches!(
+                self.action,
+                "previous_answer" | "next_answer" | "toggle_answers_only"
+            )
+    }
+
     pub(crate) fn is_side_pane(self) -> bool {
         self.context == KeymapContext::Global
             && matches!(
@@ -132,8 +140,10 @@ impl KeymapActionId {
         use KeymapContext::Global;
         use KeymapContext::List;
 
-        if self.is_side_pane() && matches!(other.context, List | KeymapContext::Pager)
-            || other.is_side_pane() && matches!(self.context, List | KeymapContext::Pager)
+        if (self.is_side_pane() || self.is_conversation_navigation())
+            && matches!(other.context, List | KeymapContext::Pager)
+            || (other.is_side_pane() || other.is_conversation_navigation())
+                && matches!(self.context, List | KeymapContext::Pager)
         {
             return true;
         }
@@ -326,6 +336,9 @@ define_runtime_action_bindings! {
         open_transcript,
         find_transcript,
         select_transcript,
+        previous_answer,
+        next_answer,
+        toggle_answers_only,
         focus_activity,
         focus_main_composer,
         focus_sidebar_content,

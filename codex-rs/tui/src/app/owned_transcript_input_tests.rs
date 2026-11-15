@@ -20,6 +20,78 @@ use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
 use pretty_assertions::assert_eq;
 
+#[tokio::test]
+async fn answer_shortcuts_preserve_draft_and_route_remapped_chords() -> Result<()> {
+    let mut app = crate::app::test_support::make_test_app().await;
+    let mut server = Box::pin(crate::start_embedded_app_server_for_picker(&app.config)).await?;
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    tui.set_owned_screen(/*owned*/ true)?;
+    attach_thread(&mut app, ThreadId::new());
+    app.chat_widget.apply_external_edit("Unsent draft".into());
+    let message = |text: &str, phase| {
+        Arc::new(
+            crate::history_cell::AgentMarkdownCell::new(text.into(), &app.config.cwd)
+                .with_phase(Some(phase)),
+        ) as Arc<dyn crate::history_cell::HistoryCell>
+    };
+    app.transcript_cells = vec![
+        super::tests::user_cell("Prompt"),
+        message(
+            "Progress text",
+            codex_protocol::models::MessagePhase::Commentary,
+        ),
+        message(
+            "First answer",
+            codex_protocol::models::MessagePhase::FinalAnswer,
+        ),
+        message(
+            "Second answer",
+            codex_protocol::models::MessagePhase::FinalAnswer,
+        ),
+    ];
+    for (key, shown, hidden) in [
+        ('a', "First answer", "Progress text"),
+        ('k', "Second answer", "First answer"),
+        ('k', "First answer", "Progress text"),
+        ('j', "Second answer", "First answer"),
+    ] {
+        app.handle_tui_event(
+            &mut tui,
+            &mut server,
+            TuiEvent::Key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::ALT)),
+        )
+        .await?;
+        app.render_owned_transcript(&mut tui, Size::new(80, 20))?;
+        let rendered = super::tests::buffer_text(
+            crate::custom_terminal::test_support::last_rendered_buffer(&tui.terminal),
+        );
+        assert!(rendered.contains(shown), "{rendered}");
+        assert!(!rendered.contains(hidden), "{rendered}");
+        assert_eq!(app.chat_widget.composer_text_with_pending(), "Unsent draft");
+    }
+    let config = toml::from_str::<codex_config::types::TuiKeymap>(
+        "[global]\ntoggle_answers_only = 'ctrl-x a'",
+    )?;
+    app.keymap = RuntimeKeymap::from_config(&config).expect("valid answer shortcut");
+    app.local_settings.tui.keymap = config.clone();
+    app.chat_widget.apply_keymap_update(config, &app.keymap);
+    app.transcript_view.begin_search();
+    for (key, modifier) in [('x', KeyModifiers::CONTROL), ('a', KeyModifiers::NONE)] {
+        app.handle_tui_event(
+            &mut tui,
+            &mut server,
+            TuiEvent::Key(KeyEvent::new(KeyCode::Char(key), modifier)),
+        )
+        .await?;
+    }
+    assert!(!app.transcript_view.is_answers_only());
+    assert!(!app.transcript_view.is_search_editing());
+    assert_eq!(app.chat_widget.composer_text_with_pending(), "Unsent draft");
+    server.shutdown().await?;
+    tui.set_owned_screen(/*owned*/ false)?;
+    Ok(())
+}
+
 async fn select_transcript(
     app: &mut App,
     tui: &mut tui::Tui,

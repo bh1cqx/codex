@@ -231,6 +231,10 @@ impl UserHistoryCell {
 }
 
 impl HistoryCell for UserHistoryCell {
+    fn is_conversation_message(&self) -> bool {
+        true
+    }
+
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         visible_lines(self.display_hyperlink_lines(width))
     }
@@ -564,6 +568,17 @@ impl AgentMessageCell {
 }
 
 impl HistoryCell for AgentMessageCell {
+    fn is_answer(&self) -> bool {
+        matches!(
+            self.phase,
+            Some(MessagePhase::FinalAnswer | MessagePhase::PartialAnswer)
+        )
+    }
+
+    fn is_conversation_message(&self) -> bool {
+        self.phase != Some(MessagePhase::Commentary)
+    }
+
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         visible_lines(self.display_hyperlink_lines(width))
     }
@@ -792,6 +807,18 @@ impl AgentMarkdownCell {
 }
 
 impl HistoryCell for AgentMarkdownCell {
+    fn is_answer(&self) -> bool {
+        self.question_titles.is_empty()
+            && matches!(
+                self.phase,
+                Some(MessagePhase::FinalAnswer | MessagePhase::PartialAnswer)
+            )
+    }
+
+    fn is_conversation_message(&self) -> bool {
+        !self.question_titles.is_empty() || self.phase != Some(MessagePhase::Commentary)
+    }
+
     fn copy_source(&self) -> Option<&str> {
         Some(self.copy_source.as_deref().unwrap_or(&self.markdown_source))
     }
@@ -861,6 +888,17 @@ impl StreamingAgentTailCell {
 }
 
 impl HistoryCell for StreamingAgentTailCell {
+    fn is_answer(&self) -> bool {
+        matches!(
+            self.phase,
+            Some(MessagePhase::FinalAnswer | MessagePhase::PartialAnswer)
+        )
+    }
+
+    fn is_conversation_message(&self) -> bool {
+        self.phase != Some(MessagePhase::Commentary)
+    }
+
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         visible_lines(self.display_hyperlink_lines(width))
     }

@@ -200,6 +200,13 @@ impl TranscriptView {
         cells: &[Arc<dyn HistoryCell>],
         index: usize,
     ) -> Option<Arc<TextLayout>> {
+        if self.answers_only
+            && cells
+                .get(index)
+                .is_some_and(|cell| !cell.is_conversation_message())
+        {
+            return Some(Arc::new(TextLayout::new(Vec::new(), self.area.width)));
+        }
         let key = self.entry_key(cells, index);
         if let Some(layout) = self
             .snapshot()
@@ -242,6 +249,9 @@ impl TranscriptView {
             })));
         };
         let width = self.area.width.max(/*other*/ 1);
+        if self.answers_only && !cell.is_conversation_message() {
+            return Some(Arc::new(TextLayout::new(Vec::new(), width)));
+        }
         // Session information belongs before all history, including pages not loaded yet.
         // Pinned displayed revisions above remain visible; hidden headers never enter the cache.
         if self.history.has_unloaded_history()
@@ -281,6 +291,9 @@ impl TranscriptView {
                 .rev()
                 .find(|&previous_index| {
                     let previous = &cells[previous_index];
+                    if self.answers_only && !previous.is_conversation_message() {
+                        return false;
+                    }
                     let key = EntryKey::cell(previous);
                     if let Some(layout) = self.search.match_layout(key).or_else(|| {
                         self.snapshot()

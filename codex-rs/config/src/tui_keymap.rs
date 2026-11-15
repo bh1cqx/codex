@@ -179,6 +179,12 @@ pub struct TuiGlobalKeymap {
     pub find_transcript: Option<KeybindingsSpec>,
     /// Enter keyboard selection mode for the transcript.
     pub select_transcript: Option<KeybindingsSpec>,
+    /// Jump to the previous final or partial answer.
+    pub previous_answer: Option<KeybindingsSpec>,
+    /// Jump to the next final or partial answer.
+    pub next_answer: Option<KeybindingsSpec>,
+    /// Toggle prompts and answers without tool activity or progress messages.
+    pub toggle_answers_only: Option<KeybindingsSpec>,
     /// Focus activity groups in the owned transcript to inspect their details.
     pub focus_activity: Option<KeybindingsSpec>,
     /// Open the external editor for the current draft.

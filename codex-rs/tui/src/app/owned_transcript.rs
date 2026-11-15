@@ -225,10 +225,19 @@ impl App {
         );
         let active_key = chat_widget.active_cell_transcript_key();
         let detailed = view.is_detailed();
+        let answers_only = view.is_answers_only();
         let search_changed = view.sync_search_live_tail(transcript_width, active_key, |width| {
-            chat_widget.active_cell_transcript_hyperlink_lines(width)
+            if answers_only {
+                chat_widget.active_conversation_lines(width)
+            } else {
+                chat_widget.active_cell_transcript_hyperlink_lines(width)
+            }
         });
-        let changed = if detailed {
+        let changed = if answers_only {
+            view.sync_live_tail(transcript_width, active_key, |width| {
+                chat_widget.active_conversation_lines(width)
+            })
+        } else if detailed {
             view.sync_live_tail(transcript_width, active_key, |width| {
                 chat_widget.active_cell_transcript_hyperlink_lines(width)
             })
@@ -1390,6 +1399,7 @@ impl App {
             && keymap_action_ids().any(|action| {
                 action.context != KeymapContext::Pager
                     && !matches!(action.action, "find_transcript" | "focus_activity")
+                    && !action.is_conversation_navigation()
                     && self.active_keymap_contexts().contains_action(action)
                     && !(empty_enter_returns_to_latest
                         && action.context == KeymapContext::Composer
@@ -1411,6 +1421,20 @@ impl App {
         }
         let was_select_mode = self.transcript_view.is_select_mode();
         let select_exit_key = Self::transcript_select_exit_key(event);
+        if let TuiEvent::Key(key) = event
+            && self
+                .transcript_view
+                .handle_conversation_key(*key, &self.transcript_cells)
+                .is_some()
+        {
+            if was_select_mode {
+                self.backtrack.pending_select_exit_key = None;
+                self.backtrack.select_exit_key = select_exit_key;
+            }
+            self.request_owned_history(tui, app_server);
+            tui.frame_requester().schedule_frame();
+            return Ok(true);
+        }
         let action = match event {
             TuiEvent::Key(key) if was_select_mode && !self.transcript_view.is_search_editing() => {
                 if let Some(action) = self

@@ -8,6 +8,7 @@
 mod activity;
 mod bookmark;
 mod composer_gap;
+mod conversation;
 mod copy_mode;
 mod disclosure;
 mod document;
@@ -112,6 +113,7 @@ pub(crate) struct TranscriptView {
     live_separated: Option<Arc<TextLayout>>,
     live_key: Option<(u16, ActiveCellTranscriptKey)>,
     live_continuation: bool,
+    live_answer_start: bool,
     area: Rect,
     prompt_header_target: Option<(Rect, EntryKey)>,
     suppressed_prompt_header: Option<prompt_header::SuppressedHeader>,
@@ -122,6 +124,8 @@ pub(crate) struct TranscriptView {
     held_reading: Option<ViewSnapshot>,
     search: Search,
     detailed: bool,
+    answers_only: bool,
+    pending_previous_answer: bool,
     mode: HistoryRenderMode,
     pub(crate) history: TranscriptHistoryState,
     highlight: Option<usize>,
@@ -156,6 +160,7 @@ impl Default for TranscriptView {
             live_separated: None,
             live_key: None,
             live_continuation: false,
+            live_answer_start: false,
             area: Rect::default(),
             prompt_header_target: None,
             suppressed_prompt_header: None,
@@ -166,6 +171,8 @@ impl Default for TranscriptView {
             held_reading: None,
             search: Search::default(),
             detailed: false,
+            answers_only: false,
+            pending_previous_answer: false,
             mode: HistoryRenderMode::Rich,
             history: TranscriptHistoryState::Idle,
             highlight: None,
@@ -493,16 +500,29 @@ impl TranscriptView {
         let (summary, expanded) = self.sync_live_tool_summary(cells, collapse_turn_details, active);
         let disclose = !self.disclosure.live_ids.is_empty() && self.mode == HistoryRenderMode::Rich;
         let mode = self.mode;
+        let answers_only = self.answers_only;
         let lines = |width| {
-            let mut lines = active.map_or_else(Vec::new, |c| c.transcript_hyperlink_lines(width));
-            if !lines.is_empty() && !auxiliary.is_empty() {
-                lines.push("".into());
+            let mut lines = active
+                .filter(|cell| !answers_only || cell.is_conversation_message())
+                .map_or_else(Vec::new, |cell| {
+                    if answers_only {
+                        crate::history_cell::fullscreen_session_lines(
+                            cell, width, /*detailed*/ true, mode,
+                        )
+                    } else {
+                        cell.transcript_hyperlink_lines(width)
+                    }
+                });
+            if !answers_only {
+                if !lines.is_empty() && !auxiliary.is_empty() {
+                    lines.push("".into());
+                }
+                lines.extend_from_slice(auxiliary);
             }
-            lines.extend_from_slice(auxiliary);
             (!lines.is_empty()).then_some(lines)
         };
         self.sync_search_live_tail(width, /*key*/ None, lines);
-        if self.detailed {
+        if self.detailed || answers_only {
             self.sync_live_tail(width, /*key*/ None, lines);
         } else if let Some(row) = summary {
             self.sync_live_layout(width, /*key*/ None, |width| {
@@ -749,6 +769,7 @@ impl TranscriptView {
     }
 
     pub(crate) fn cancel_beginning(&mut self) {
+        self.pending_previous_answer = false;
         if self.history == TranscriptHistoryState::LoadingBeginning {
             // Keep the in-flight page, but let the user's new navigation supersede the jump.
             self.history = TranscriptHistoryState::LoadingOlder;
@@ -775,7 +796,9 @@ impl TranscriptView {
     }
 
     pub(crate) fn needs_history(&mut self, cells: &[Arc<dyn HistoryCell>]) -> bool {
-        self.search.needs_history(self.history)
+        self.pending_previous_answer &= self.history.has_unloaded_history();
+        self.pending_previous_answer
+            || self.search.needs_history(self.history)
             || (self.search.allows_viewport_paging() && self.near_start(cells))
     }
 

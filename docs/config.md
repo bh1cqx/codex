@@ -62,6 +62,15 @@ Answers and partial answers have a teal `▌` along the left edge. Progress mess
 
 This styling applies automatically to live output and restored history, with no extra rows or configuration. Messages without phase metadata keep their original appearance. Raw output and copied Markdown retain the source text.
 
+In fullscreen chat and the **Ctrl+T** transcript:
+
+* **Alt+K / Alt+J:** jump to the previous or next teal answer. A streamed answer counts as one message. Previous-answer navigation loads older history when needed.
+* **Alt+A:** toggle between the normal view and prompts plus answers. The filtered view also keeps proposed plans and questions. It hides progress, reasoning, and tool output, including from transcript search and selection.
+
+Filtering changes only the view. Drafts, saved history, and approval controls stay available. Older messages without phase metadata remain visible because their role cannot be determined reliably. The footer shows “Answers only” while filtering is enabled.
+
+Remap these keys with `previous_answer`, `next_answer`, and `toggle_answers_only` under `[tui.keymap.global]` in `~/.codex/multiline.config.toml`, or use `/keymap`. Existing custom bindings take precedence over these defaults. Native terminal scrollback is unchanged; use **Ctrl+T** when running inline.
+
 ## Session tabs
 
 Pin a task with **Alt+P** to show session tabs below the status header in fullscreen chat. Tabs use the same pinned tasks as the agent command center and remain hidden in that view. The current task appears alongside pinned tasks, even when it is not pinned.

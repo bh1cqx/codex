@@ -26,7 +26,9 @@ impl TranscriptView {
     ) -> bool {
         self.jump_to_latest();
         self.hold_position();
-        let latest = cells.iter().rposition(is_response);
+        let latest = cells.iter().rposition(|cell| {
+            is_response(cell) && (!self.answers_only || cell.is_conversation_message())
+        });
         self.copy_mode = Some(CopyMode {
             _guard: guard,
             response: latest.and_then(|index| {
@@ -113,6 +115,9 @@ impl TranscriptView {
             Box::new(current.as_ref().map_or(0, |(index, _)| *index)..cells.len())
         };
         for index in indices {
+            if self.answers_only && !cells[index].is_conversation_message() {
+                continue;
+            }
             let user = cells[index].as_any().downcast_ref::<UserHistoryCell>();
             if user.is_none() && !is_response(&cells[index]) {
                 continue;

@@ -130,6 +130,9 @@ pub(crate) struct AppKeymap {
     pub(crate) find_transcript: Vec<KeyBinding>,
     /// Enter keyboard selection mode for the transcript.
     pub(crate) select_transcript: Vec<KeyBinding>,
+    pub(crate) previous_answer: Vec<KeyBinding>,
+    pub(crate) next_answer: Vec<KeyBinding>,
+    pub(crate) toggle_answers_only: Vec<KeyBinding>,
     /// Focus activity groups in the owned transcript to inspect their details.
     pub(crate) focus_activity: Vec<KeyBinding>,
     /// Open retained warnings without replacing the composer.
@@ -747,32 +750,21 @@ impl RuntimeKeymap {
                         && binding.chord.prefix.parts() == key_hint::plain(KeyCode::F(9)).parts()
                 }));
 
-        // New activity defaults yield to existing custom keys and chord prefixes.
-        let focus_activity_defaults: Vec<_> = defaults
-            .app
-            .focus_activity
-            .iter()
-            .copied()
-            .filter(|binding| {
-                !configured_context_binding_is_used(keymap, *binding)
-                    && !chords.bindings.iter().any(|chord| {
-                        chord.chord.prefix.normalized_parts() == binding.normalized_parts()
-                    })
-            })
-            .collect();
         // New defaults must not invalidate an existing custom binding or chord prefix.
-        let open_warnings_defaults: Vec<_> = defaults
-            .app
-            .open_warnings
-            .iter()
-            .copied()
-            .filter(|binding| {
-                !configured_context_binding_is_used(keymap, *binding)
-                    && !chords.bindings.iter().any(|chord| {
-                        chord.chord.prefix.normalized_parts() == binding.normalized_parts()
-                    })
-            })
-            .collect();
+        let unclaimed_defaults = |bindings: &[KeyBinding]| {
+            bindings
+                .iter()
+                .copied()
+                .filter(|binding| {
+                    !configured_context_binding_is_used(keymap, *binding)
+                        && !chords.bindings.iter().any(|chord| {
+                            chord.chord.prefix.normalized_parts() == binding.normalized_parts()
+                        })
+                })
+                .collect::<Vec<_>>()
+        };
+        let focus_activity_defaults = unclaimed_defaults(&defaults.app.focus_activity);
+        let open_warnings_defaults = unclaimed_defaults(&defaults.app.open_warnings);
 
         let app = AppKeymap {
             change_host: resolve_bindings(
@@ -884,6 +876,21 @@ impl RuntimeKeymap {
                 keymap.global.select_transcript.as_ref(),
                 &defaults.app.select_transcript,
                 "tui.keymap.global.select_transcript",
+            )?,
+            previous_answer: resolve_bindings(
+                keymap.global.previous_answer.as_ref(),
+                &unclaimed_defaults(&defaults.app.previous_answer),
+                "tui.keymap.global.previous_answer",
+            )?,
+            next_answer: resolve_bindings(
+                keymap.global.next_answer.as_ref(),
+                &unclaimed_defaults(&defaults.app.next_answer),
+                "tui.keymap.global.next_answer",
+            )?,
+            toggle_answers_only: resolve_bindings(
+                keymap.global.toggle_answers_only.as_ref(),
+                &unclaimed_defaults(&defaults.app.toggle_answers_only),
+                "tui.keymap.global.toggle_answers_only",
             )?,
             focus_activity: resolve_bindings(
                 keymap.global.focus_activity.as_ref(),
@@ -1657,6 +1664,18 @@ impl RuntimeKeymap {
                 app.select_transcript.as_slice(),
             ),
             (
+                keymap.global.previous_answer.as_ref(),
+                app.previous_answer.as_slice(),
+            ),
+            (
+                keymap.global.next_answer.as_ref(),
+                app.next_answer.as_slice(),
+            ),
+            (
+                keymap.global.toggle_answers_only.as_ref(),
+                app.toggle_answers_only.as_slice(),
+            ),
+            (
                 keymap.global.focus_activity.as_ref(),
                 app.focus_activity.as_slice(),
             ),
@@ -1944,6 +1963,9 @@ impl RuntimeKeymap {
                 open_transcript: default_bindings![ctrl(KeyCode::Char('t'))],
                 find_transcript: default_bindings![plain(KeyCode::F(3))],
                 select_transcript: default_bindings![],
+                previous_answer: default_bindings![alt(KeyCode::Char('k'))],
+                next_answer: default_bindings![alt(KeyCode::Char('j'))],
+                toggle_answers_only: default_bindings![alt(KeyCode::Char('a'))],
                 focus_activity: default_bindings![plain(KeyCode::F(4))],
                 open_warnings: default_bindings![plain(KeyCode::F(2))],
                 open_external_editor: default_bindings![ctrl(KeyCode::Char('g'))],
@@ -2408,6 +2430,12 @@ impl RuntimeKeymap {
             ("open_transcript", self.app.open_transcript.as_slice()),
             ("find_transcript", self.app.find_transcript.as_slice()),
             ("select_transcript", self.app.select_transcript.as_slice()),
+            ("previous_answer", self.app.previous_answer.as_slice()),
+            ("next_answer", self.app.next_answer.as_slice()),
+            (
+                "toggle_answers_only",
+                self.app.toggle_answers_only.as_slice(),
+            ),
             ("focus_activity", self.app.focus_activity.as_slice()),
             ("open_warnings", self.app.open_warnings.as_slice()),
             (
@@ -2534,6 +2562,12 @@ impl RuntimeKeymap {
                 ("open_transcript", self.app.open_transcript.as_slice()),
                 ("find_transcript", self.app.find_transcript.as_slice()),
                 ("select_transcript", self.app.select_transcript.as_slice()),
+                ("previous_answer", self.app.previous_answer.as_slice()),
+                ("next_answer", self.app.next_answer.as_slice()),
+                (
+                    "toggle_answers_only",
+                    self.app.toggle_answers_only.as_slice(),
+                ),
                 ("focus_activity", self.app.focus_activity.as_slice()),
                 ("open_warnings", self.app.open_warnings.as_slice()),
                 (
@@ -2616,6 +2650,12 @@ impl RuntimeKeymap {
                 ("open_transcript", self.app.open_transcript.as_slice()),
                 ("find_transcript", self.app.find_transcript.as_slice()),
                 ("select_transcript", self.app.select_transcript.as_slice()),
+                ("previous_answer", self.app.previous_answer.as_slice()),
+                ("next_answer", self.app.next_answer.as_slice()),
+                (
+                    "toggle_answers_only",
+                    self.app.toggle_answers_only.as_slice(),
+                ),
                 ("focus_activity", self.app.focus_activity.as_slice()),
                 ("open_warnings", self.app.open_warnings.as_slice()),
                 (
@@ -2796,6 +2836,15 @@ impl RuntimeKeymap {
                     "global.select_transcript",
                     self.app.select_transcript.as_slice(),
                 ),
+                (
+                    "global.previous_answer",
+                    self.app.previous_answer.as_slice(),
+                ),
+                ("global.next_answer", self.app.next_answer.as_slice()),
+                (
+                    "global.toggle_answers_only",
+                    self.app.toggle_answers_only.as_slice(),
+                ),
                 ("pager.scroll_up", self.pager.scroll_up.as_slice()),
                 ("pager.scroll_down", self.pager.scroll_down.as_slice()),
                 ("pager.page_up", self.pager.page_up.as_slice()),
@@ -2870,6 +2919,15 @@ impl RuntimeKeymap {
                 (
                     "global.select_transcript",
                     self.app.select_transcript.as_slice(),
+                ),
+                (
+                    "global.previous_answer",
+                    self.app.previous_answer.as_slice(),
+                ),
+                ("global.next_answer", self.app.next_answer.as_slice()),
+                (
+                    "global.toggle_answers_only",
+                    self.app.toggle_answers_only.as_slice(),
                 ),
             ]),
         )?;
@@ -3584,6 +3642,74 @@ mod tests {
             runtime.list.jump_bottom,
             vec![key_hint::plain(KeyCode::End)]
         );
+    }
+
+    #[test]
+    fn conversation_defaults_yield_to_existing_bindings() {
+        let config = toml::from_str::<TuiKeymap>(
+            "[global]\ncopy = 'alt-k'\nopen_transcript = 'alt-j'\n[editor]\nmove_left = 'alt-a'",
+        )
+        .unwrap();
+        let runtime = RuntimeKeymap::from_config(&config).unwrap();
+        assert!(runtime.app.previous_answer.is_empty());
+        assert!(runtime.app.next_answer.is_empty());
+        assert!(runtime.app.toggle_answers_only.is_empty());
+        assert_eq!(runtime.app.copy, vec![key_hint::alt(KeyCode::Char('k'))]);
+    }
+
+    #[test]
+    fn conversation_actions_work_in_transcripts_but_not_other_pagers() {
+        let runtime = RuntimeKeymap::defaults();
+        for (name, key) in [
+            ("previous_answer", 'k'),
+            ("next_answer", 'j'),
+            ("toggle_answers_only", 'a'),
+        ] {
+            let action = keymap_action_id("global", name).unwrap();
+            assert!(KeymapContextSet::transcript().contains_action(action));
+            assert!(KeymapContextSet::browsing().contains_action(action));
+            assert!(KeymapContextSet::activity().contains_action(action));
+            assert!(!KeymapContextSet::new(KeymapContext::Pager).contains_action(action));
+            assert!(!KeymapContextSet::warnings().contains_action(action));
+            assert_eq!(
+                bindings_for_action(&runtime, "global", name).unwrap(),
+                &[key_hint::alt(KeyCode::Char(key))]
+            );
+        }
+        let config = toml::from_str::<TuiKeymap>(
+            "[global]\nprevious_answer = 'alt-j'\nnext_answer = 'alt-k'\ntoggle_answers_only = 'ctrl-x a'",
+        )
+        .unwrap();
+        let runtime = RuntimeKeymap::from_config(&config).unwrap();
+        assert_eq!(
+            runtime.app.previous_answer,
+            vec![key_hint::alt(KeyCode::Char('j'))]
+        );
+        assert_eq!(
+            runtime.app.next_answer,
+            vec![key_hint::alt(KeyCode::Char('k'))]
+        );
+        assert!(
+            runtime
+                .chords
+                .bindings
+                .iter()
+                .any(|binding| { binding.action.action == "toggle_answers_only" })
+        );
+    }
+
+    #[test]
+    fn conversation_remaps_reject_keys_owned_by_another_active_action() {
+        for config in [
+            "[global]\nprevious_answer = 'alt-r'",
+            "[global]\nprevious_answer = 'alt-j'\nnext_answer = 'alt-j'",
+            "[global]\nprevious_answer = 'alt-k'\n[pager]\nscroll_up = 'alt-k'",
+            "[global]\ntoggle_answers_only = 'alt-a'\n[list]\nmove_up = 'alt-a'",
+            "[global]\nnext_answer = 'ctrl-a'",
+        ] {
+            let config = toml::from_str::<TuiKeymap>(config).unwrap();
+            assert!(RuntimeKeymap::from_config(&config).is_err(), "{config:?}");
+        }
     }
 
     #[test]

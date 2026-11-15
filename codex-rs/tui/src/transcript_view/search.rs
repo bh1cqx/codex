@@ -635,6 +635,7 @@ impl TranscriptView {
         if inserted.is_empty() {
             return;
         }
+        self.resume_previous_answer(cells, inserted.clone());
         let index = inserted.end - 1;
         let cursor = Cursor {
             anchor: Anchor {

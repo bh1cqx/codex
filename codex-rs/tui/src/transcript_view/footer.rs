@@ -155,13 +155,28 @@ impl TranscriptView {
         // Selection can pause following without hiding the current final row.
         let can_return =
             self.selection.is_none() && self.can_return_to_latest() && !self.tail_visible;
-        (pending || self.unseen_activity || can_return).then(|| {
+        (pending || self.unseen_activity || can_return || self.answers_only).then(|| {
             let navigation = if self.can_return_to_latest() {
                 latest_navigation
             } else {
                 ""
             };
             let mut status = self.status_line_with_navigation(navigation, motion);
+            if self.answers_only && !pending {
+                let mut spans = vec!["Answers only".fg(accent_color())];
+                if let Some(key) = self
+                    .disclosure
+                    .keymap
+                    .primary_hint(crate::keymap::KeymapContext::Global, "toggle_answers_only")
+                {
+                    spans.extend([" · ".dim(), key.into(), " full view".dim()]);
+                }
+                if !navigation.is_empty() {
+                    spans.push(" · ".dim());
+                    spans.extend(navigation_line(navigation).spans);
+                }
+                status = Line::from(spans);
+            }
             // Loading must not resize the composer or move its caret. Shorten secondary text
             // before clipping either shortcut; failed loads prioritize their retry action.
             if status.width() > usize::from(width) {
@@ -187,7 +202,12 @@ impl TranscriptView {
                     spans.extend(key_label_spans(&JumpTarget::Beginning.hint_label()));
                     Line::from(spans)
                 } else if navigation.is_empty() {
-                    Line::from("New activity").dim()
+                    Line::from(if self.answers_only {
+                        "Answers only"
+                    } else {
+                        "New activity"
+                    })
+                    .dim()
                 } else if self.unseen_activity {
                     let mut spans = vec!["New · ".dim()];
                     spans.extend(navigation_line(navigation).spans);
