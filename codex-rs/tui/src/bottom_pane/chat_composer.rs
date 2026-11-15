@@ -829,6 +829,11 @@ impl ChatComposer {
                     .primary_hint(KeymapContext::Global, "open_transcript"),
                 find_transcript_key: default_keymap
                     .primary_hint(KeymapContext::Global, "find_transcript"),
+                previous_answer_key: default_keymap
+                    .primary_hint(KeymapContext::Global, "previous_answer"),
+                next_answer_key: default_keymap.primary_hint(KeymapContext::Global, "next_answer"),
+                toggle_answers_only_key: default_keymap
+                    .primary_hint(KeymapContext::Global, "toggle_answers_only"),
                 focus_activity_key: default_keymap
                     .primary_hint(KeymapContext::Global, "focus_activity"),
                 insert_newline_key: footer_insert_newline_key(
@@ -1134,6 +1139,11 @@ impl ChatComposer {
             keymap.primary_hint(KeymapContext::Global, "open_transcript");
         self.footer.find_transcript_key =
             keymap.primary_hint(KeymapContext::Global, "find_transcript");
+        self.footer.previous_answer_key =
+            keymap.primary_hint(KeymapContext::Global, "previous_answer");
+        self.footer.next_answer_key = keymap.primary_hint(KeymapContext::Global, "next_answer");
+        self.footer.toggle_answers_only_key =
+            keymap.primary_hint(KeymapContext::Global, "toggle_answers_only");
         self.footer.focus_activity_key =
             keymap.primary_hint(KeymapContext::Global, "focus_activity");
         self.footer.insert_newline_key =
