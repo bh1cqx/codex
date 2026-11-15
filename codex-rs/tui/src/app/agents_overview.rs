@@ -38,6 +38,7 @@ pub(crate) const AGENTS_OVERVIEW_VIEW_ID: &str = "agents-overview";
 
 #[derive(Default)]
 pub(super) struct AgentsOverviewState {
+    pub(super) tabs: super::session_tabs::SessionTabs,
     /// Missing metadata records a local resume until the next metadata refresh.
     pub(super) threads: HashMap<ThreadId, Option<Thread>>,
     /// Identifies the query that populated the cached search results.
@@ -443,6 +444,9 @@ impl App {
     }
 
     pub(super) fn repaint_agents_overview(&mut self) {
+        if self.session_tabs_available() {
+            self.chat_widget.request_redraw();
+        }
         let Some(selected) = self
             .chat_widget
             .selected_index_for_present_view(AGENTS_OVERVIEW_VIEW_ID)

@@ -1192,7 +1192,7 @@ async fn shared_overview_seeds_once_and_retains_locally_resumed_history() -> Res
     Ok(())
 }
 
-async fn finish_overview_refresh(
+pub(in crate::app) async fn finish_overview_refresh(
     app: &mut App,
     app_server: &AppServerSession,
     events: &mut tokio::sync::mpsc::UnboundedReceiver<AppEvent>,

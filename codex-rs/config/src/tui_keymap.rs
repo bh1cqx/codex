@@ -207,6 +207,14 @@ pub struct TuiGlobalKeymap {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct TuiChatKeymap {
+    /// Switch to the previous pinned session tab.
+    pub session_tab_previous: Option<KeybindingsSpec>,
+    /// Switch to the next pinned session tab.
+    pub session_tab_next: Option<KeybindingsSpec>,
+    /// Return to the last viewed session.
+    pub session_tab_last: Option<KeybindingsSpec>,
+    /// Pin or unpin the current session.
+    pub toggle_session_pin: Option<KeybindingsSpec>,
     /// Open saved prompts and slash commands.
     pub open_presets: Option<KeybindingsSpec>,
     /// Start or stop a voice conversation.

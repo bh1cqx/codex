@@ -56,6 +56,19 @@ The header uses a shaded background across the full row, with label colors adjus
 
 Remove `status_header` or set it to `[]` to hide it. Restart the TUI after editing the file. The setting stays local to this fork's TUI; it requires no daemon changes and uses the same session data as the official client.
 
+## Session tabs
+
+Pin a task with **Alt+P** to show session tabs below the status header in fullscreen chat. Tabs use the same pinned tasks as the agent command center and remain hidden in that view. The current task appears alongside pinned tasks, even when it is not pinned.
+
+* **Alt+PageUp / Alt+PageDown:** switch between tabs.
+* **Alt+backtick:** return to the last viewed session.
+* **Alt+P** or the star button: pin or unpin the current task.
+* Click a tab to open it. Overflow arrows reveal other tabs.
+
+The badges show `▶` for working, `!` for needs input, `○` for ready, and `·` for inactive. An additional `*` marks unread activity. Switching uses the existing session attachment path and preserves each task's draft.
+
+Remap the shortcuts with `session_tab_previous`, `session_tab_next`, `session_tab_last`, and `toggle_session_pin` under `[tui.keymap.chat]` in `~/.codex/multiline.config.toml`, or use `/keymap`.
+
 ## Lifecycle hooks
 
 Admins can set top-level `allow_managed_hooks_only = true` in

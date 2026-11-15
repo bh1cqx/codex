@@ -282,6 +282,7 @@ mod safety_recourse;
 mod server_version_notice;
 mod session_lifecycle;
 mod session_picker;
+mod session_tabs;
 mod side;
 mod side_companion;
 mod side_focus;
@@ -1150,6 +1151,9 @@ impl App {
             event
         };
 
+        if Box::pin(self.handle_session_tabs_event(tui, app_server, &event)).await {
+            return Ok(AppRunControl::Continue);
+        }
         if let TuiEvent::Key(key) = &event
             && self.handle_side_focus_key(tui, app_server, *key).await
         {

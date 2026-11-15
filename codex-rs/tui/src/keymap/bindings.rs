@@ -353,6 +353,10 @@ define_runtime_action_bindings! {
         toggle_side_conversation,
     ],
     "chat" => Chat, chat, chat [
+        session_tab_previous,
+        session_tab_next,
+        session_tab_last,
+        toggle_session_pin,
         open_presets,
         toggle_voice,
         interrupt_turn,
