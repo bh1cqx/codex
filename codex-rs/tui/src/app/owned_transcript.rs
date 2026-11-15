@@ -249,6 +249,7 @@ impl App {
         tui: &mut tui::Tui,
         screen_size: Size,
     ) -> Result<Rect> {
+        self.prepare_diff_panel();
         self.transcript_view.image_protocol = self.prepare_frame_images(tui);
         let frames = tui.frame_requester();
         if self.conversation_frame.sidebar.is_some() || self.conversation_frame.chat_strip.is_some()
@@ -394,7 +395,14 @@ impl App {
                         frame.cursor_position = None;
                     }
                     let resize_hint = self.pane_resize.map(|_| side_pane::RESIZE_HINT);
-                    if let Some(doc) = self
+                    if let Some(diff) = self
+                        .sidebars
+                        .get_mut(&sidebar_parent)
+                        .filter(|pane| pane.is_diff())
+                        .and_then(|pane| pane.diff.as_mut())
+                    {
+                        diff.render(*sidebar, frame.buffer);
+                    } else if let Some(doc) = self
                         .sidebars
                         .get_mut(&sidebar_parent)
                         .and_then(|pane| pane.active_document())
@@ -520,6 +528,7 @@ impl App {
                         );
                     }
                     if let Some(pane) = self.sidebar()
+                        && !pane.is_diff()
                         && (pane.creation.is_none()
                             || matches!(
                                 pane.visible_content(),

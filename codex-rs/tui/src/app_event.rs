@@ -1085,8 +1085,18 @@ pub(crate) enum AppEvent {
         result: Result<ConnectorsSnapshot, String>,
     },
 
+    DiffStarted {
+        request_id: uuid::Uuid,
+        thread_id: Option<ThreadId>,
+        cwd: PathBuf,
+    },
     /// Result of computing a `/diff` command.
-    DiffResult(PathUri, String),
+    DiffResult {
+        request_id: uuid::Uuid,
+        thread_id: Option<ThreadId>,
+        cwd: PathBuf,
+        text: String,
+    },
 
     /// Open the app link view in the bottom pane.
     OpenAppLink {

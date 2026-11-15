@@ -69,6 +69,14 @@ The badges show `▶` for working, `!` for needs input, `○` for ready, and `·
 
 Remap the shortcuts with `session_tab_previous`, `session_tab_next`, `session_tab_last`, and `toggle_session_pin` under `[tui.keymap.chat]` in `~/.codex/multiline.config.toml`, or use `/keymap`.
 
+## Diff side panel
+
+`/diff` opens a read-only Changes panel beside fullscreen chat. It includes tracked and untracked changes and uses the existing workspace command runner. Run `/diff` again to refresh the snapshot.
+
+Click the conversation to keep typing, or click the panel to use the usual pager shortcuts. The mouse wheel scrolls the panel. Press **q** or **Ctrl+C** while the panel has focus, or click **×**, to close it. Closing the diff leaves side conversations intact.
+
+On narrow terminals, the focused panel fills the screen. Inline mode keeps the existing full-screen diff pager. Delayed results cannot replace a newer request or reopen a hidden panel.
+
 ## Lifecycle hooks
 
 Admins can set top-level `allow_managed_hooks_only = true` in

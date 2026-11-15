@@ -231,6 +231,11 @@ impl App {
         server: &mut AppServerSession,
         event: &TuiEvent,
     ) -> bool {
+        if self.sidebar().is_some_and(sidebar::SidebarPane::is_diff)
+            && self.conversation_frame.panel_area().is_some()
+        {
+            return false;
+        }
         if !self.conversation_focus_available(tui) || !self.sidebar_chooser_available() {
             self.sidebar_press = None;
             return false;

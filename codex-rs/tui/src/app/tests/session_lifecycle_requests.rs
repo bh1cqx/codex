@@ -6172,7 +6172,12 @@ async fn change_directory_scenario() -> Result<()> {
     let skills = AppEvent::SkillsListLoaded { cwd, result };
     let (cwd, plugins) = (current.clone(), Some(vec![]));
     let plugins = AppEvent::PluginMentionsLoaded { cwd, plugins };
-    let diff = AppEvent::DiffResult(current.clone().abs().into(), "stale diff".to_string());
+    let diff = AppEvent::DiffResult {
+        request_id: uuid::Uuid::new_v4(),
+        thread_id: Some(original),
+        cwd: current.clone(),
+        text: "stale diff".to_string(),
+    };
     let branch = AppEvent::SyncThreadGitBranch {
         thread_id: original,
         branch: "stale".to_string(),
