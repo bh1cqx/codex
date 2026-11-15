@@ -6,11 +6,11 @@ expression: "snapshots.join(\"\\n\")"
 Hidden
 compact: []
 detailed:
-• Read src/main.rs (src/main.rs:3).
+∴ Read src/main.rs (src/main.rs:3).
 
 Visible
 compact: []
 detailed:
-• Read src/main.rs (src/main.rs:3).
+∴ Read src/main.rs (src/main.rs:3).
   
   Raw detail.

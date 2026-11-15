@@ -13,7 +13,7 @@ Compact:
 • Explored
   └ Read later.txt
 
-• Checking one more file.
+· Checking one more file.
 
 • Explored
   └ Read final.txt
@@ -23,9 +23,9 @@ $ ls missing
 list output
 ✗ (1) • 5ms
 
-• Inspecting the page
+∴ Inspecting the page
 
-• Checking its contents
+∴ Checking its contents
 
 $ cat index.html
 read output
@@ -39,7 +39,7 @@ $ cat later.txt
 later output
 ✓ • 5ms
 
-• Checking one more file.
+· Checking one more file.
 
 $ cat final.txt
 after-message output

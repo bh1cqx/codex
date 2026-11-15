@@ -334,8 +334,8 @@ async fn completed_reasoning_stays_in_expanded_transcript_for_live_and_replay() 
         Live status:
         The playback clock preserves elapsed time.
         Expanded transcript:
-        • Inspecting repository structure
-        • Mapping the app structure
-        • The playback clock preserves elapsed time.
+        ∴ Inspecting repository structure
+        ∴ Mapping the app structure
+        ∴ The playback clock preserves elapsed time.
         ");
 }

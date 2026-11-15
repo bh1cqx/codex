@@ -1086,7 +1086,7 @@ impl App {
                         let (start, replacement): (_, Arc<dyn HistoryCell>) = match stream {
                             CapturedSideStream::Answer { cell, item } => {
                                 let start = trailing_run_start::<history_cell::AgentMessageCell>(cells);
-                                answer = item.map(|item| super::side_companion::SideAnswer::new(item, start));
+                                answer = item.map(|item| super::side_companion::SideAnswer::new(item, start, cell.phase.clone()));
                                 (start, cell)
                             }
                             CapturedSideStream::Plan(cell) => {
@@ -1213,9 +1213,8 @@ impl App {
                 scrollback_reflow,
                 deferred_history_cell,
             } => {
-                let mut cell = history_cell::AgentMarkdownCell::new_with_inline_visualizations(source, &cwd, inline_visualization_context).with_copy_source(copy_source);
+                let mut cell = history_cell::AgentMarkdownCell::new_with_inline_visualizations(source, &cwd, inline_visualization_context).with_copy_source(copy_source).with_phase(phase);
                 cell.interrupted_item = interrupted_item;
-                cell.phase = phase;
                 self.handle_consolidate_agent_message(
                     tui,
                     cell,

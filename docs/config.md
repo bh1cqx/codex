@@ -56,6 +56,12 @@ The header uses a purple tint across the full row: deep purple on dark terminals
 
 Remove `status_header` or set it to `[]` to hide it. Restart the TUI after editing the file. The setting stays local to this fork's TUI; it requires no daemon changes and uses the same session data as the official client.
 
+## Message appearance
+
+Answers and partial answers have a teal `▌` along the left edge. Progress messages use a small `·` and softer text; expanded thinking summaries use an italic `∴`. Tool calls retain their action labels and success/error colors.
+
+This styling applies automatically to live output and restored history, with no extra rows or configuration. Messages without phase metadata keep their original appearance. Raw output and copied Markdown retain the source text.
+
 ## Session tabs
 
 Pin a task with **Alt+P** to show session tabs below the status header in fullscreen chat. Tabs use the same pinned tasks as the agent command center and remain hidden in that view. The current task appears alongside pinned tasks, even when it is not pinned.

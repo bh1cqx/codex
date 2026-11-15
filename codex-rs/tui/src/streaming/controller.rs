@@ -51,6 +51,7 @@ use crate::markdown_render::ListSpacing;
 use crate::style::proposed_plan_style;
 use crate::terminal_hyperlinks::HyperlinkLine;
 use crate::terminal_hyperlinks::prefix_hyperlink_lines;
+use codex_protocol::models::MessagePhase;
 use ratatui::prelude::Stylize;
 use ratatui::text::Line;
 use std::path::Path;
@@ -590,9 +591,15 @@ impl StreamCore {
 pub(crate) struct StreamController {
     core: StreamCore,
     header_emitted: bool,
+    pub(crate) phase: Option<MessagePhase>,
 }
 
 impl StreamController {
+    pub(crate) fn with_phase(mut self, phase: Option<MessagePhase>) -> Self {
+        self.phase = phase;
+        self
+    }
+
     /// Select spacing before the first delta; final source-backed cells choose their own layout.
     pub(crate) fn with_list_spacing(mut self, list_spacing: ListSpacing) -> Self {
         self.core.render.list_spacing = list_spacing;
@@ -623,6 +630,7 @@ impl StreamController {
         Self {
             core: StreamCore::new(width, cwd, render_mode, inline_visualization_context),
             header_emitted: false,
+            phase: None,
         }
     }
 
@@ -734,7 +742,8 @@ impl StreamController {
                 let header_emitted = self.header_emitted;
                 self.header_emitted = true;
                 !header_emitted
-            }),
+            })
+            .with_phase(self.phase.clone()),
         ))
     }
 }

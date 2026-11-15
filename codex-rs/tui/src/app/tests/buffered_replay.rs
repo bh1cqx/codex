@@ -171,7 +171,7 @@ async fn refreshed_active_reasoning_accepts_later_deltas_and_complete_summary() 
             .collect::<String>();
         insta::allow_duplicates! {
             insta::assert_snapshot!(transcript, @"
-            • Original analysis paragraph
+            ∴ Original analysis paragraph
               Running checks
               Final paragraph
             ");
@@ -587,7 +587,7 @@ async fn voice_handoff_replay_keeps_public_reasoning_and_hides_private_reasoning
             _ => None,
         })
         .collect();
-    insta::assert_snapshot!(summaries.join("\n"), @"• Public progress");
+    insta::assert_snapshot!(summaries.join("\n"), @"∴ Public progress");
 
     // Force the handoff out of the buffer before checking late private updates.
     store.capacity = 1;

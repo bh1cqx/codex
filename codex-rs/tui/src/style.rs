@@ -236,6 +236,22 @@ pub(crate) fn secondary_text_style() -> Style {
         .not_bold()
 }
 
+pub(crate) fn answer_gutter_style() -> Style {
+    let background = default_bg();
+    let preferred = if background.is_some_and(is_light) {
+        (0, 112, 100)
+    } else {
+        (88, 214, 191)
+    };
+    Style::default()
+        .fg(contrast::foreground(
+            preferred,
+            background,
+            effective_stdout_color_level(),
+        ))
+        .bold()
+}
+
 /// Bring a focusable surface closer to the terminal background while keeping its text readable.
 pub(crate) fn quiet_workspace_style() -> Style {
     let base = Style::default().not_bold().not_reversed().not_underlined();

@@ -98,14 +98,14 @@ async fn resumed_reasoning_without_start_accepts_deltas_and_completion() {
                 insta::allow_duplicates! {
                     if snapshot_item_id == Some("previous") {
                         insta::assert_snapshot!(transcript, @"
-                        • Earlier paragraph.
+                        ∴ Earlier paragraph.
 
-                        • Snapshot paragraph.
+                        ∴ Snapshot paragraph.
                           Completed paragraph.
                         ");
                     } else {
                         insta::assert_snapshot!(transcript, @"
-                        • Snapshot paragraph.
+                        ∴ Snapshot paragraph.
                           Completed paragraph.
                         ");
                     }
@@ -158,7 +158,7 @@ async fn resumed_trailing_reasoning_is_kept_when_no_more_reasoning_arrives() {
         );
         insta::allow_duplicates! {
             insta::assert_snapshot!(reasoning_transcript(&mut events), @"
-            • Saved paragraph.
+            ∴ Saved paragraph.
             ");
         }
     }

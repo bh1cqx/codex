@@ -5,12 +5,15 @@ use super::markdown_render_cache::MarkdownRenderCache;
 use super::*;
 use crate::async_question_reply::AsyncQuestionReply;
 use crate::style::accent_color_on;
+use crate::style::answer_gutter_style;
 use crate::style::history_prompt_style;
+use crate::style::secondary_text_style;
 use crate::terminal_hyperlinks::annotate_web_urls;
 use crate::terminal_hyperlinks::lines_with_sources_eq;
 use crate::terminal_hyperlinks::remap_source_wrapped_line;
 use crate::wrapping::url_preserving_wrap_options;
 use crate::wrapping::word_wrap_line_with_source;
+use codex_protocol::models::MessagePhase;
 use std::borrow::Cow;
 
 #[derive(Debug)]
@@ -451,27 +454,19 @@ impl ReasoningSummaryCell {
             crate::width::usable_content_width_u16(width, /*reserved_cols*/ 2),
             Some(self.cwd.as_path()),
         );
-        let summary_style = Style::default().dim().italic();
+        let summary_style = secondary_text_style().italic();
         let summary_lines = lines
             .into_iter()
-            .map(|mut line| {
-                line.line.spans = line
-                    .line
-                    .spans
-                    .into_iter()
-                    .map(|span| span.patch_style(summary_style))
-                    .collect();
-                if let Some(source) = &mut line.source {
-                    source.span_style = source.span_style.patch(summary_style);
-                }
-                line
+            .map(|line| {
+                let style = summary_style.patch(line.line.style);
+                line.style(style).resolve_span_styles()
             })
             .collect::<Vec<_>>();
 
         crate::terminal_hyperlinks::adaptive_wrap_hyperlink_lines(
             &summary_lines,
             RtOptions::new(width as usize)
-                .initial_indent("• ".dim().into())
+                .initial_indent(Span::styled("∴ ", summary_style).into())
                 .subsequent_indent("  ".into()),
         )
     }
@@ -511,6 +506,37 @@ impl HistoryCell for ReasoningSummaryCell {
 pub(crate) struct AgentMessageCell {
     lines: Vec<HyperlinkLine>,
     is_first_line: bool,
+    phase: Option<MessagePhase>,
+}
+
+fn agent_message_prefix(phase: Option<&MessagePhase>, is_first_line: bool) -> Span<'static> {
+    match phase {
+        Some(MessagePhase::FinalAnswer | MessagePhase::PartialAnswer) => {
+            Span::styled("▌ ", answer_gutter_style())
+        }
+        Some(MessagePhase::Commentary) if is_first_line => {
+            Span::styled("· ", secondary_text_style())
+        }
+        None if is_first_line => "• ".dim(),
+        _ => "  ".into(),
+    }
+}
+
+fn style_agent_message_lines(
+    lines: Vec<HyperlinkLine>,
+    phase: Option<&MessagePhase>,
+) -> Vec<HyperlinkLine> {
+    if phase != Some(&MessagePhase::Commentary) {
+        return lines;
+    }
+    let style = secondary_text_style();
+    lines
+        .into_iter()
+        .map(|line| {
+            let style = style.patch(line.line.style);
+            line.style(style).resolve_span_styles()
+        })
+        .collect()
 }
 
 impl AgentMessageCell {
@@ -519,6 +545,7 @@ impl AgentMessageCell {
         Self {
             lines: plain_hyperlink_lines(lines),
             is_first_line,
+            phase: None,
         }
     }
 
@@ -526,7 +553,13 @@ impl AgentMessageCell {
         Self {
             lines,
             is_first_line,
+            phase: None,
         }
+    }
+
+    pub(crate) fn with_phase(mut self, phase: Option<MessagePhase>) -> Self {
+        self.phase = phase;
+        self
     }
 }
 
@@ -537,13 +570,12 @@ impl HistoryCell for AgentMessageCell {
 
     fn display_hyperlink_lines(&self, width: u16) -> Vec<HyperlinkLine> {
         let mut wrapped = Vec::new();
-        for (index, line) in self.lines.iter().enumerate() {
-            let initial_indent = if index == 0 && self.is_first_line {
-                "• ".dim().into()
-            } else {
-                "  ".into()
-            };
-            let mut subsequent_indent = Line::from("  ");
+        let lines = style_agent_message_lines(self.lines.clone(), self.phase.as_ref());
+        for (index, line) in lines.iter().enumerate() {
+            let initial_indent =
+                agent_message_prefix(self.phase.as_ref(), index == 0 && self.is_first_line).into();
+            let mut subsequent_indent =
+                Line::from(agent_message_prefix(self.phase.as_ref(), false));
             subsequent_indent
                 .spans
                 .extend(crate::insert_history::leading_whitespace_prefix(&line.line).spans);
@@ -606,7 +638,7 @@ impl HistoryCell for PendingAgentMessageCell {
 pub(crate) struct AgentMarkdownCell {
     /// Reply identity used for completion replacement and corrected copy ordering.
     pub(crate) interrupted_item: Option<(String, String)>,
-    pub(crate) phase: Option<codex_protocol::models::MessagePhase>,
+    pub(crate) phase: Option<MessagePhase>,
     markdown_source: String,
     copy_source: Option<String>,
     cwd: PathBuf,
@@ -671,10 +703,12 @@ impl AgentMarkdownCell {
         }
     }
 
-    pub(crate) fn with_phase(
-        mut self,
-        phase: Option<codex_protocol::models::MessagePhase>,
-    ) -> Self {
+    pub(crate) fn with_phase(mut self, phase: Option<MessagePhase>) -> Self {
+        if self.phase != phase
+            && let Some(cache) = &mut self.rendered_lines
+        {
+            *cache = MarkdownRenderCache::default();
+        }
         self.phase = phase;
         self
     }
@@ -732,13 +766,12 @@ impl AgentMarkdownCell {
             else {
                 return prefix_hyperlink_lines(
                     vec![HyperlinkLine::new(Line::default())],
-                    "• ".dim(),
-                    "  ".into(),
+                    agent_message_prefix(self.phase.as_ref(), true),
+                    agent_message_prefix(self.phase.as_ref(), false),
                 );
             };
 
-            // Re-render markdown from source at the current width. Reserve 2 columns for the "• " /
-            // " " prefix prepended below.
+            // Re-render at the current width, reserving two columns for the message gutter.
             let markdown = |source: &str| {
                 crate::markdown::render_markdown_agent_with_list_spacing(
                     source,
@@ -753,7 +786,11 @@ impl AgentMarkdownCell {
                 if self.spoken_artifacts {
                     super::spoken_artifacts::annotate_spoken_artifacts(&mut lines, &self.cwd);
                 }
-                prefix_hyperlink_lines(lines, "• ".dim(), "  ".into())
+                prefix_hyperlink_lines(
+                    style_agent_message_lines(lines, self.phase.as_ref()),
+                    agent_message_prefix(self.phase.as_ref(), true),
+                    agent_message_prefix(self.phase.as_ref(), false),
+                )
             } else {
                 super::async_questions::render(
                     &self.markdown_source,
@@ -815,11 +852,13 @@ mod tests;
 pub(crate) struct StreamingAgentTailCell {
     lines: Vec<HyperlinkLine>,
     is_first_line: bool,
+    phase: Option<MessagePhase>,
 }
 
 impl PartialEq for StreamingAgentTailCell {
     fn eq(&self, other: &Self) -> bool {
         self.is_first_line == other.is_first_line
+            && self.phase == other.phase
             && lines_with_sources_eq(&self.lines, &other.lines)
     }
 }
@@ -829,7 +868,13 @@ impl StreamingAgentTailCell {
         Self {
             lines,
             is_first_line,
+            phase: None,
         }
+    }
+
+    pub(crate) fn with_phase(mut self, phase: Option<MessagePhase>) -> Self {
+        self.phase = phase;
+        self
     }
 }
 
@@ -842,13 +887,9 @@ impl HistoryCell for StreamingAgentTailCell {
         // Tail lines are already rendered at the controller's current stream width.
         // Re-wrapping them here can split table borders and produce malformed in-flight rows.
         normalize_whitespace_only_hyperlink_lines(prefix_hyperlink_lines(
-            self.lines.clone(),
-            if self.is_first_line {
-                "• ".dim()
-            } else {
-                "  ".into()
-            },
-            "  ".into(),
+            style_agent_message_lines(self.lines.clone(), self.phase.as_ref()),
+            agent_message_prefix(self.phase.as_ref(), self.is_first_line),
+            agent_message_prefix(self.phase.as_ref(), false),
         ))
     }
 
@@ -857,7 +898,10 @@ impl HistoryCell for StreamingAgentTailCell {
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        plain_lines(self.display_lines(/*width*/ u16::MAX))
+        plain_lines(
+            Self::new(self.lines.clone(), self.is_first_line)
+                .display_lines(/*width*/ u16::MAX),
+        )
     }
 
     fn is_stream_continuation(&self) -> bool {

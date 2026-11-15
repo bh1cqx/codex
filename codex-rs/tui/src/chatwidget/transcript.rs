@@ -57,6 +57,9 @@ pub(super) struct TranscriptState {
     pub(super) recording_finished_cloud_text: bool,
     /// Turn and item IDs for the agent message currently supplying streamed deltas.
     pub(super) active_streamed_agent_message: Option<(String, String)>,
+    /// Phase from item/started, keyed independently because its first text can arrive later.
+    pub(super) agent_message_phase:
+        Option<((String, String), codex_protocol::models::MessagePhase)>,
     /// Turn/item identity and raw source of the latest interleaved stream flush.
     pub(super) last_flushed_agent_message: Option<(String, String)>,
     /// Raw markdown of the most recently completed proposed plan.
@@ -139,6 +142,7 @@ impl TranscriptState {
         self.committed_turn_response = None;
         self.last_completed_agent_message = None;
         self.active_streamed_agent_message = None;
+        self.agent_message_phase = None;
         self.last_flushed_agent_message = None;
         self.saw_plan_update_this_turn = false;
         self.saw_plan_item_this_turn = false;

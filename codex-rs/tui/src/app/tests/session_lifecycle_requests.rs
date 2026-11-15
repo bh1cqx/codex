@@ -632,7 +632,7 @@ async fn cloud_resume_picker_reconciles_admitted_steers() -> Result<()> {
         assert_eq!(app.chat_widget.thread_id(), Some(thread_id));
         if thread_id == other {
             insta::assert_snapshot!(rendered_responses(&app), @"
-            • Commentary response
+            · Commentary response
             • Partial response
             ");
             assert!(rendered_transcript(&app).contains("::git-st"));
@@ -738,7 +738,7 @@ async fn cloud_resume_picker_reconciles_admitted_steers() -> Result<()> {
                 Some("Canonical final response")
             );
             insta::assert_snapshot!(&live_responses, @"
-            • Commentary response
+            · Commentary response
             • Earlier final response
             • Canonical final response
             ");
