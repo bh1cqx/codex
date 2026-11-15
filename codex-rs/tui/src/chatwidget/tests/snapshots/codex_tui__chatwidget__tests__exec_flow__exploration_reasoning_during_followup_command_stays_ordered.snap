@@ -7,10 +7,10 @@ $ ls
 file.txt
 ✓ • 5ms
 
-• Read the file next.
+∴ Read the file next.
 
 $ cat file.txt
 contents
 ✓ • 5ms
 
-• Waiting for the file.
+∴ Waiting for the file.

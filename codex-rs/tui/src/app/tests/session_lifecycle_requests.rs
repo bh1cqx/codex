@@ -589,7 +589,7 @@ async fn cloud_resume_picker_reconciles_admitted_steers() -> Result<()> {
         assert_eq!(app.chat_widget.thread_id(), Some(thread_id));
         if thread_id == other {
             insta::assert_snapshot!(rendered_responses(&app), @"
-            • Commentary response
+            · Commentary response
             • Partial response
             ");
             for notification in [
@@ -610,7 +610,7 @@ async fn cloud_resume_picker_reconciles_admitted_steers() -> Result<()> {
             }
             drain_app_events(&mut app, &mut tui, &mut server, &mut events).await?;
             insta::assert_snapshot!(rendered_responses(&app), @"
-            • Commentary response
+            · Commentary response
             • Partial response
             • Live response continues
             ");

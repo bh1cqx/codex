@@ -112,7 +112,7 @@ async fn failed_speech_recovers_only_for_the_current_input() {
             if superseded {
                 ""
             } else {
-                "• Undelivered answer"
+                "▌ Undelivered answer"
             }
         );
     }
@@ -149,7 +149,7 @@ async fn delayed_voice_transcript_preserves_unspoken_text_fallback() {
             TurnStatus::Completed,
         );
         insta::allow_duplicates! {
-            insta::assert_snapshot!(history_text(&mut events), @"• Current answer");
+            insta::assert_snapshot!(history_text(&mut events), @"▌ Current answer");
         }
         assert!(ops.try_recv().is_err());
     }
@@ -573,7 +573,7 @@ async fn answer_exceeding_speech_budget_is_shown_in_full_instead() {
         .filter_map(|event| match event {
             AppEvent::InsertHistoryCell(cell) if !cell.as_any().is::<FinalMessageSeparator>() => {
                 Some(
-                    cell.transcript_lines(/*width*/ 80)
+                    cell.raw_lines()
                         .into_iter()
                         .map(|line| line.to_string())
                         .collect::<Vec<_>>()
@@ -586,10 +586,7 @@ async fn answer_exceeding_speech_budget_is_shown_in_full_instead() {
         .join("\n");
     assert_eq!(
         rendered.split_whitespace().collect::<Vec<_>>().join(" "),
-        format!("• {text}")
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
+        text.split_whitespace().collect::<Vec<_>>().join(" ")
     );
 }
 

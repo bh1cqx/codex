@@ -15,6 +15,30 @@ mod tables;
 mod elements;
 
 #[test]
+fn message_presentation_gutters_stay_out_of_selection_after_rewrap() {
+    let markdown = "A **bold** answer with [a link](https://example.test).\n\n\
+        - Run `echo ready`\n\n```sh\necho ready\n```\n\n\
+        | Name | Value |\n| --- | --- |\n| result | ready |";
+    for width in [80, 24] {
+        let original = markdown_layout(markdown, width);
+        let expected = payload(&original, 0..original.text().len());
+        for phase in [
+            codex_protocol::models::MessagePhase::Commentary,
+            codex_protocol::models::MessagePhase::PartialAnswer,
+            codex_protocol::models::MessagePhase::FinalAnswer,
+        ] {
+            let cell =
+                AgentMarkdownCell::new(markdown.into(), Path::new("/")).with_phase(Some(phase));
+            let layout = TextLayout::new(cell.retained_hyperlink_lines(width, false), width);
+            assert_eq!(layout.text(), original.text());
+            assert_eq!(payload(&layout, 0..layout.text().len()), expected);
+            let narrow = layout.rewrap(12);
+            assert_eq!(payload(&narrow, 0..narrow.text().len()), expected);
+        }
+    }
+}
+
+#[test]
 fn selected_markdown_preserves_lists_and_inline_code() {
     let cells: Vec<Arc<dyn HistoryCell>> = vec![Arc::new(AgentMarkdownCell::new(
         "- setting `closeRequested_`,\n- removing the tailer from `tailers_`,\n- clearing /repo/my_notes!.txt.".into(),

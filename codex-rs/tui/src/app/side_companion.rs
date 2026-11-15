@@ -14,6 +14,7 @@ use codex_app_server_protocol::ServerNotification;
 use codex_app_server_protocol::ThreadItemPayload;
 use codex_app_server_protocol::TurnStatus;
 use codex_protocol::items::AsyncUserInputQuestion;
+use codex_protocol::models::MessagePhase;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -32,15 +33,21 @@ pub(super) struct SideAnswer {
     item_id: String,
     index: usize,
     pending: String,
+    phase: Option<MessagePhase>,
 }
 
 impl SideAnswer {
-    pub(super) fn new((turn_id, item_id): (String, String), index: usize) -> Self {
+    pub(super) fn new(
+        (turn_id, item_id): (String, String),
+        index: usize,
+        phase: Option<MessagePhase>,
+    ) -> Self {
         Self {
             turn_id,
             item_id,
             index,
             pending: String::new(),
+            phase,
         }
     }
 
@@ -100,6 +107,32 @@ impl SideCompanion {
                     Duration::ZERO,
                 ));
             }
+            ServerNotification::ItemStarted(event) => {
+                let ThreadItemPayload::AgentMessage {
+                    id,
+                    phase,
+                    questions,
+                    ..
+                } = &event.item.payload
+                else {
+                    return false;
+                };
+                if store.is_realtime_delegated_turn(&event.turn_id) || questions.is_some() {
+                    return false;
+                }
+                if self
+                    .answer
+                    .as_ref()
+                    .is_none_or(|answer| !answer.matches(&event.turn_id, id))
+                {
+                    self.flush_answer();
+                    self.answer = Some(SideAnswer::new(
+                        (event.turn_id.clone(), id.clone()),
+                        self.cells.len(),
+                        phase.clone(),
+                    ));
+                }
+            }
             ServerNotification::AgentMessageDelta(delta)
                 if !delta.delta.is_empty() && !store.is_realtime_delegated_turn(&delta.turn_id) =>
             {
@@ -115,6 +148,7 @@ impl SideCompanion {
                     SideAnswer::new(
                         (delta.turn_id.clone(), delta.item_id.clone()),
                         self.cells.len(),
+                        None,
                     )
                 });
                 answer.pending.push_str(&delta.delta);
@@ -211,6 +245,7 @@ impl SideCompanion {
             ThreadItemPayload::AgentMessage {
                 id,
                 text,
+                phase,
                 questions,
                 ..
             } => {
@@ -228,6 +263,7 @@ impl SideCompanion {
                         index,
                         text.clone(),
                         questions.as_deref().unwrap_or_default(),
+                        phase.clone(),
                     );
                 }
                 self.display.last_completed_agent_message = Some((turn.to_owned(), id.clone()));
@@ -308,19 +344,29 @@ impl SideCompanion {
             .to_owned();
         source.push_str(&answer.pending);
         answer.pending.clear();
-        self.write_answer(index, source, &[]);
+        let phase = answer.phase.clone();
+        self.write_answer(index, source, &[], phase);
     }
 
-    fn write_answer(&mut self, index: usize, source: String, questions: &[AsyncUserInputQuestion]) {
+    fn write_answer(
+        &mut self,
+        index: usize,
+        source: String,
+        questions: &[AsyncUserInputQuestion],
+        phase: Option<MessagePhase>,
+    ) {
         let cwd = &self.display.cwd;
         let markdown = parse_assistant_markdown(&source, cwd.as_path());
-        let cell: Arc<dyn HistoryCell> = Arc::new(AgentMarkdownCell::from_parsed_message(
-            markdown.visible_markdown,
-            source,
-            cwd.as_path(),
-            self.display.visualizations.clone(),
-            questions,
-        ));
+        let cell: Arc<dyn HistoryCell> = Arc::new(
+            AgentMarkdownCell::from_parsed_message(
+                markdown.visible_markdown,
+                source,
+                cwd.as_path(),
+                self.display.visualizations.clone(),
+                questions,
+            )
+            .with_phase(phase),
+        );
         if index == self.cells.len() {
             self.cells.push(cell);
         } else {

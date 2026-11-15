@@ -96,7 +96,14 @@ impl ChatWidget {
     ) {
         let had_stream_controller = self.stream_controller.is_some();
         if let Some(mut controller) = self.stream_controller.take() {
+            let phase = if completed_message.is_some() {
+                phase
+            } else {
+                controller.phase.clone()
+            };
             let needs_scrollback_reflow = controller.needs_scrollback_reflow();
+            let phase_changed = controller.phase != phase;
+            controller.phase = phase.clone();
             self.clear_active_stream_tail();
             let interrupted_item = self
                 .transcript
@@ -117,7 +124,8 @@ impl ChatWidget {
                 // Stream finalization supplies one trailing newline when the last delta omitted it.
                 !streamed_message_matches_completed(streamed, completed)
             });
-            let scrollback_reflow = if needs_scrollback_reflow || completed_message_differs {
+            let defer_history_cell = needs_scrollback_reflow || completed_message_differs;
+            let scrollback_reflow = if defer_history_cell || phase_changed {
                 crate::app_event::ConsolidationScrollbackReflow::Required
             } else {
                 crate::app_event::ConsolidationScrollbackReflow::IfResizeReflowRan
@@ -127,15 +135,14 @@ impl ChatWidget {
             if cell.is_some() {
                 self.bottom_pane.hide_status_indicator();
             }
-            let deferred_history_cell =
-                if scrollback_reflow == crate::app_event::ConsolidationScrollbackReflow::Required {
-                    cell
-                } else {
-                    if let Some(cell) = cell {
-                        self.add_boxed_history(cell);
-                    }
-                    None
-                };
+            let deferred_history_cell = if defer_history_cell {
+                cell
+            } else {
+                if let Some(cell) = cell {
+                    self.add_boxed_history(cell);
+                }
+                None
+            };
             // Consolidate the run of streaming AgentMessageCells into a single AgentMarkdownCell
             // that can re-render from source on resize.
             let copy_source = completed_message.map(str::to_owned).or(streamed_source);
@@ -171,6 +178,7 @@ impl ChatWidget {
         }
         if completed_message.is_some() {
             self.transcript.active_streamed_agent_message = None;
+            self.transcript.agent_message_phase = None;
             self.transcript.last_flushed_agent_message = None;
         }
     }
@@ -229,7 +237,8 @@ impl ChatWidget {
                 &self.config.cwd,
                 visualizations.clone(),
                 &[],
-            );
+            )
+            .with_phase(controller.phase.clone());
             Some(CapturedSideStream::Answer {
                 cell: Arc::new(cell),
                 item: self.transcript.active_streamed_agent_message.clone(),
@@ -295,7 +304,7 @@ impl ChatWidget {
         if self.stream_controller.is_none() && !message.is_empty() {
             let displayed =
                 parse_assistant_markdown(message, self.config.cwd.as_path()).visible_markdown;
-            self.handle_streaming_delta(displayed);
+            self.handle_streaming_delta(displayed, phase.clone());
         }
         // Item completion is authoritative. Use it for consolidation so any
         // deltas dropped by a saturated transport cannot truncate the transcript.
@@ -305,7 +314,13 @@ impl ChatWidget {
     }
 
     pub(super) fn on_agent_message_delta(&mut self, delta: String) {
-        self.handle_streaming_delta(delta);
+        let phase = self
+            .transcript
+            .agent_message_phase
+            .as_ref()
+            .filter(|(key, _)| self.transcript.active_streamed_agent_message.as_ref() == Some(key))
+            .map(|(_, phase)| phase.clone());
+        self.handle_streaming_delta(delta, phase);
     }
 
     pub(super) fn on_plan_delta(&mut self, delta: String) {
@@ -726,7 +741,7 @@ impl ChatWidget {
     }
 
     #[inline]
-    pub(super) fn handle_streaming_delta(&mut self, delta: String) {
+    pub(super) fn handle_streaming_delta(&mut self, delta: String, phase: Option<MessagePhase>) {
         if !delta.is_empty() {
             self.mark_safety_buffering_agent_message_started();
         }
@@ -745,6 +760,7 @@ impl ChatWidget {
                     self.history_render_mode(),
                     inline_visualization_context,
                 )
+                .with_phase(phase)
                 .with_list_spacing(
                     if self.local_settings.transcript_mode.is_owned() {
                         ListSpacing::Compact
@@ -790,7 +806,8 @@ impl ChatWidget {
             let cell = history_cell::StreamingAgentTailCell::new(
                 tail_lines,
                 controller.tail_starts_stream(),
-            );
+            )
+            .with_phase(controller.phase.clone());
             if self
                 .transcript
                 .active_cell

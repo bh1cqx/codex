@@ -260,6 +260,7 @@ mod home_cleanup_tests;
 #[path = "tests/luna_reserve_usage_tests.rs"]
 mod luna_reserve_usage_tests;
 mod mcp_startup;
+mod message_presentation_tests;
 #[path = "tests/misalignment_policy_tests.rs"]
 mod misalignment_policy;
 #[path = "tests/model_display_name_tests.rs"]

@@ -8,7 +8,7 @@ $ cat first.txt
 first output
 ✓ • 5ms
 
-• Inspecting the next file
+∴ Inspecting the next file
 
 ↳ Interacted with background terminal · cat first.txt
   └ continue

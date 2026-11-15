@@ -601,6 +601,7 @@ impl ChatWidget {
             ThreadItemPayload::AgentMessage {
                 id,
                 text,
+                phase,
                 questions,
                 ..
             } => {
@@ -614,13 +615,14 @@ impl ChatWidget {
                         .transcript
                         .has_replayed_cloud_text(&notification.turn_id, &id)
                     || questions.is_some()
-                    || text.is_empty()
                 {
                     return;
                 }
                 let key = (notification.turn_id, id);
+                self.transcript.agent_message_phase = phase.map(|phase| (key.clone(), phase));
                 // A tool can interrupt this item and cause a second start before completion.
-                if self.transcript.active_streamed_agent_message.as_ref() != Some(&key)
+                if !text.is_empty()
+                    && self.transcript.active_streamed_agent_message.as_ref() != Some(&key)
                     && self.transcript.last_flushed_agent_message.as_ref() != Some(&key)
                 {
                     self.transcript.active_streamed_agent_message = Some(key);

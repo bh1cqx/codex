@@ -5200,7 +5200,7 @@ async fn unterminated_prose_is_visible_before_completion() {
             if mode == ModeKind::Plan {
                 chat.on_plan_delta(delta.to_string());
             } else {
-                chat.handle_streaming_delta(delta.to_string());
+                chat.handle_streaming_delta(delta.to_string(), None);
             }
         }
 
@@ -5225,7 +5225,7 @@ async fn unterminated_prose_is_visible_before_completion() {
         if mode == ModeKind::Plan {
             chat.on_plan_delta(" | partial row".to_string());
         } else {
-            chat.handle_streaming_delta(" | partial row".to_string());
+            chat.handle_streaming_delta(" | partial row".to_string(), None);
         }
         assert_eq!(
             chat.transcript
@@ -5241,13 +5241,13 @@ async fn unterminated_prose_is_visible_before_completion() {
 #[tokio::test]
 async fn unterminated_agent_delta_does_not_redraw_unchanged_stream_tail() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
-    chat.handle_streaming_delta("| Step | Owner |\n".to_string());
+    chat.handle_streaming_delta("| Step | Owner |\n".to_string(), None);
     assert!(chat.active_cell_is_stream_tail());
     let revision = chat.transcript.active_cell_revision;
 
     let (frame_requester, mut draw_rx) = FrameRequester::test_channel();
     chat.frame_requester = frame_requester;
-    chat.handle_streaming_delta("| partial".to_string());
+    chat.handle_streaming_delta("| partial".to_string(), None);
 
     assert_eq!(chat.transcript.active_cell_revision, revision);
     assert!(matches!(
@@ -5267,12 +5267,12 @@ async fn newline_agent_delta_redraws_stream_tail_after_noop_catch_up() {
     )
     .await;
     chat.on_task_started();
-    chat.handle_streaming_delta("Earlier line\n".to_string());
+    chat.handle_streaming_delta("Earlier line\n".to_string(), None);
     chat.on_commit_tick();
     assert!(!chat.bottom_pane.status_indicator_visible());
     while draw_rx.try_recv().is_ok() {}
 
-    chat.handle_streaming_delta("Intro line\n| Step | Owner |\n".to_string());
+    chat.handle_streaming_delta("Intro line\n| Step | Owner |\n".to_string(), None);
 
     assert!(chat.active_cell_is_stream_tail());
     assert!(

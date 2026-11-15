@@ -1523,9 +1523,9 @@ fn tool_groups_expand_independently_inside_a_completed_turn() {
 
     ▸ 3 previous messages
 
-    • The path is valid.
+    ▌ The path is valid.
 
-    • The fixture is missing.
+    ▌ The fixture is missing.
     ");
 
     // The wrapped prompt is taller than this viewport. Keyboard expansion keeps its control visible.

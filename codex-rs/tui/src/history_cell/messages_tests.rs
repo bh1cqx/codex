@@ -4,6 +4,123 @@ use assert_matches::assert_matches;
 use pretty_assertions::assert_eq;
 
 #[test]
+fn message_presentation_preserves_source_links_and_markdown() {
+    let markdown = "Plain **bold** [link](https://example.test).\n\nAnother paragraph.";
+    for (fg, bg) in [
+        ((230, 230, 230), (20, 20, 20)),
+        ((20, 20, 20), (250, 250, 250)),
+    ] {
+        crate::terminal_palette::with_test_default_colors(
+            crate::terminal_probe::DefaultColors { fg, bg },
+            || {
+                for (phase, prefix) in [
+                    (None, "• "),
+                    (Some(MessagePhase::Commentary), "· "),
+                    (Some(MessagePhase::PartialAnswer), "▌ "),
+                    (Some(MessagePhase::FinalAnswer), "▌ "),
+                ] {
+                    for width in [80, 24] {
+                        let cell = AgentMarkdownCell::new(markdown.into(), Path::new("/tmp"))
+                            .with_phase(phase.clone());
+                        let lines = cell.display_hyperlink_lines(width);
+                        assert!(lines[0].line.to_string().starts_with(prefix));
+                        assert_eq!(cell.copy_source(), Some(markdown));
+                        assert_eq!(cell.raw_lines(), raw_lines_from_source(markdown));
+                        assert_eq!(cell.transcript_hyperlink_lines(width), lines);
+                        assert!(lines.iter().any(|line| {
+                            line.hyperlinks
+                                .iter()
+                                .any(|link| link.destination == "https://example.test")
+                        }));
+                        let bold = lines
+                            .iter()
+                            .flat_map(|line| &line.line.spans)
+                            .find(|span| span.content == "bold")
+                            .expect("bold span");
+                        assert!(bold.style.add_modifier.contains(Modifier::BOLD));
+                        if phase == Some(MessagePhase::Commentary) {
+                            let plain = lines[0]
+                                .line
+                                .spans
+                                .iter()
+                                .find(|span| span.content.starts_with("Plain"))
+                                .expect("plain prose");
+                            assert_eq!(plain.style.fg, secondary_text_style().fg);
+                            let source = lines[0].source.as_ref().expect("copy source");
+                            assert_eq!(
+                                source.styled_range(source.range.clone()).spans[0].style.fg,
+                                plain.style.fg,
+                            );
+                        } else if phase.is_some() {
+                            assert!(lines.iter().all(|line| {
+                                line.line.spans[0].content == "▌ "
+                                    && line.line.spans[0].style == answer_gutter_style()
+                            }));
+                        }
+                    }
+                }
+            },
+        );
+    }
+}
+
+#[test]
+fn message_presentation_matches_streaming_cells_and_invalidates_phase_cache() {
+    let markdown = "First **line**.\n\nSecond line.";
+    for phase in [
+        None,
+        Some(MessagePhase::Commentary),
+        Some(MessagePhase::FinalAnswer),
+    ] {
+        let body = crate::markdown::render_markdown_agent_with_list_spacing(
+            markdown,
+            Some(38),
+            Some(Path::new("/tmp")),
+            None,
+            crate::markdown_render::ListSpacing::AfterMultiline,
+        );
+        let streamed =
+            AgentMessageCell::new_hyperlink_lines(body.clone(), true).with_phase(phase.clone());
+        let raw_tail = StreamingAgentTailCell::new(body.clone(), true).raw_lines();
+        let tail = StreamingAgentTailCell::new(body, true).with_phase(phase.clone());
+        assert_eq!(tail.raw_lines(), raw_tail);
+        let cell =
+            AgentMarkdownCell::new(markdown.into(), Path::new("/tmp")).with_phase(phase.clone());
+        let expected = cell.display_lines(40);
+        assert_eq!(
+            visible_lines(normalize_whitespace_only_hyperlink_lines(
+                streamed.display_hyperlink_lines(40)
+            )),
+            expected,
+        );
+        assert_eq!(tail.display_lines(40), expected);
+        let changed = cell.with_phase(Some(MessagePhase::Commentary));
+        assert!(changed.display_lines(40)[0].to_string().starts_with("· "));
+    }
+}
+
+#[test]
+fn message_presentation_keeps_reasoning_in_the_expanded_transcript() {
+    let reasoning = ReasoningSummaryCell::new(
+        String::new(),
+        "Thinking through the options.".into(),
+        Path::new("/tmp"),
+        true,
+    );
+    assert!(reasoning.display_lines(60).is_empty());
+    assert!(reasoning.raw_lines().is_empty());
+    let lines = reasoning.transcript_lines(60);
+    assert!(lines[0].to_string().starts_with("∴ "));
+    assert!(
+        lines[0]
+            .spans
+            .iter()
+            .filter(|span| !span.content.trim().is_empty())
+            .all(|span| span.style.add_modifier.contains(Modifier::ITALIC))
+    );
+}
+
+#[test]
 fn typed_prompt_markdown_keeps_the_prompt_gutter_and_links() {
     let message = "**testing** _hello_ [example documentation](https://example.test/docs)\n\n- Try the command\n\n```sh\necho '*literal*'\n```";
     let cell = new_user_prompt(message.into(), Vec::new(), Vec::new(), Vec::new());
