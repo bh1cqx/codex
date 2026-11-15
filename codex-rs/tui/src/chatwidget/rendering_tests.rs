@@ -205,29 +205,86 @@ async fn status_header_does_not_cover_agent_or_selection_views() {
 }
 
 #[tokio::test]
-async fn status_header_compacts_context_without_changing_footer() {
+async fn status_header_context_meter_warns_near_capacity_without_changing_footer() {
     let (mut widget, _sender, _events, _operations) = make_chatwidget_manual_with_sender().await;
     widget.local_settings.tui.status_header = Some(vec!["context-used".into()]);
     widget.local_settings.tui.status_line = Some(vec!["context-used".into()]);
     widget.token_usage_pending = false;
-    for (total_tokens, header, footer) in [
-        (0, "ctx 0%", "Context 0% used"),
-        (12_700, "ctx 70%", "Context 70% used"),
-        (16_000, "ctx 100%", "Context 100% used"),
-    ] {
-        let usage = TokenUsage {
-            total_tokens,
-            ..Default::default()
-        };
-        widget.token_info = Some(TokenUsageInfo {
-            total_token_usage: usage.clone(),
-            last_token_usage: usage,
-            model_context_window: Some(13_000),
-        });
-        widget.refresh_status_surfaces();
-        assert_eq!(status_header_text(&widget).as_deref(), Some(header));
-        assert_eq!(widget.status_line_text().as_deref(), Some(footer));
+    for use_colors in [true, false] {
+        widget.local_settings.tui.status_line_use_colors = use_colors;
+        for (total_tokens, header, footer, warning) in [
+            (0, "ctx 0% ▱▱▱▱▱", "Context 0% used", None),
+            (12_700, "ctx 70% ▰▰▰▱▱", "Context 70% used", None),
+            (12_790, "ctx 79% ▰▰▰▱▱", "Context 79% used", None),
+            (
+                12_800,
+                "ctx 80% ▰▰▰▰▱",
+                "Context 80% used",
+                Some(Style::default().yellow()),
+            ),
+            (
+                12_940,
+                "ctx 94% ▰▰▰▰▱",
+                "Context 94% used",
+                Some(Style::default().yellow()),
+            ),
+            (
+                12_950,
+                "ctx 95% ▰▰▰▰▱",
+                "Context 95% used",
+                Some(Style::default().red().bold()),
+            ),
+            (
+                16_000,
+                "ctx 100% ▰▰▰▰▰",
+                "Context 100% used",
+                Some(Style::default().red().bold()),
+            ),
+        ] {
+            let usage = TokenUsage {
+                total_tokens,
+                ..Default::default()
+            };
+            widget.token_info = Some(TokenUsageInfo {
+                total_token_usage: usage.clone(),
+                last_token_usage: usage,
+                model_context_window: Some(13_000),
+            });
+            widget.refresh_status_surfaces();
+            assert_eq!(status_header_text(&widget).as_deref(), Some(header));
+            assert_eq!(widget.status_line_text().as_deref(), Some(footer));
+            let header_style = widget
+                .status_header
+                .as_ref()
+                .and_then(StatusLine::as_native)
+                .expect("header")
+                .line
+                .spans[0]
+                .style;
+            if let Some(warning) = warning.filter(|_| use_colors) {
+                assert_eq!(
+                    header_style.fg,
+                    Some(crate::style::readable_color_on(
+                        warning.fg.expect("warning color"),
+                        None,
+                    ))
+                );
+                assert_eq!(header_style.add_modifier, warning.add_modifier);
+            } else {
+                let footer_style = widget
+                    .status_line_content()
+                    .and_then(StatusLine::as_native)
+                    .expect("footer")
+                    .line
+                    .spans[0]
+                    .style;
+                assert_eq!(header_style, footer_style);
+            }
+        }
     }
+    widget.token_usage_pending = true;
+    widget.refresh_status_surfaces();
+    assert_eq!(status_header_text(&widget), None);
 }
 
 #[tokio::test]
