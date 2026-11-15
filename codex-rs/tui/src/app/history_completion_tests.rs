@@ -76,6 +76,46 @@ fn multiple_turns_keep_item_groups_and_completion_order() {
 }
 
 #[test]
+fn interleaved_turns_complete_in_item_order() {
+    let turns = [
+        turn("parent", TurnStatus::Completed, &["c"]),
+        turn("follow-up", TurnStatus::Completed, &["b"]),
+    ];
+    let items = [
+        (turns[1].id.clone(), turns[1].items[0].payload.clone()),
+        (turns[0].id.clone(), turns[0].items[0].payload.clone()),
+    ];
+    assert_eq!(
+        group_turn_items(&items, &turns),
+        vec![(0..1, Some(&turns[1])), (1..2, Some(&turns[0]))],
+    );
+}
+
+#[test]
+fn interleaved_turns_keep_itemless_interruptions_attached() {
+    let turns = [
+        turn("parent", TurnStatus::Completed, &["a", "c"]),
+        turn("after-parent", TurnStatus::Interrupted, &[]),
+        turn("follow-up", TurnStatus::Completed, &["b"]),
+        turn("after-follow-up", TurnStatus::Interrupted, &[]),
+    ];
+    let items = [
+        (turns[0].id.clone(), turns[0].items[0].payload.clone()),
+        (turns[2].id.clone(), turns[2].items[0].payload.clone()),
+        (turns[0].id.clone(), turns[0].items[1].payload.clone()),
+    ];
+    assert_eq!(
+        group_turn_items(&items, &turns),
+        vec![
+            (0..2, Some(&turns[2])),
+            (2..2, Some(&turns[3])),
+            (2..3, Some(&turns[0])),
+            (3..3, Some(&turns[1])),
+        ],
+    );
+}
+
+#[test]
 fn itemless_interruptions_keep_their_position_on_the_owning_page() {
     let turns = [
         turn("empty first", TurnStatus::Interrupted, &[]),
