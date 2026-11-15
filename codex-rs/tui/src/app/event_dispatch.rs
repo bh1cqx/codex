@@ -1663,8 +1663,8 @@ impl App {
             AppEvent::DiffStarted { request_id, thread_id, cwd } => {
                 self.start_diff_view(tui, request_id, thread_id, cwd);
             }
-            AppEvent::DiffResult { request_id, thread_id, cwd, text } => {
-                self.complete_diff_view(tui, request_id, thread_id, cwd, text);
+            AppEvent::DiffResult { request_id, thread_id, cwd, result } => {
+                self.complete_diff_view(tui, request_id, thread_id, cwd, result);
             }
             AppEvent::OpenAppLink {
                 app_id,

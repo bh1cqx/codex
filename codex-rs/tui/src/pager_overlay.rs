@@ -490,6 +490,15 @@ impl StaticOverlay {
     pub(crate) fn scroll_lines(&mut self, rows: isize) {
         self.view.scroll_offset = self.view.scroll_offset.saturating_add_signed(rows);
     }
+
+    pub(crate) fn replace_lines(&mut self, lines: Vec<Line<'static>>) {
+        let paragraph = Paragraph::new(Text::from(lines)).wrap(Wrap { trim: false });
+        self.view.renderables = vec![Box::new(CachedRenderable::new(paragraph))];
+    }
+
+    pub(crate) fn set_keymap(&mut self, keymap: PagerKeymap) {
+        self.view.keymap = keymap;
+    }
 }
 
 impl StaticOverlay {
@@ -619,5 +628,24 @@ mod tests {
         );
 
         assert_eq!(pv.content_height(/*width*/ 80), 5);
+    }
+
+    #[test]
+    fn replacing_pager_lines_preserves_scroll_and_clamps_after_shrinking() {
+        let lines = || (0..80).map(|i| Line::from(format!("line {i}"))).collect();
+        let mut overlay = static_overlay(lines(), "Changes");
+        let area = Rect::new(0, 0, 40, 12);
+        overlay.scroll_lines(30);
+        overlay.render(area, &mut Buffer::empty(area));
+        overlay.replace_lines(lines());
+        overlay.render(area, &mut Buffer::empty(area));
+        assert_eq!(overlay.view.scroll_offset, 30);
+        assert_eq!(overlay.view.last_content_height, Some(7));
+
+        overlay.replace_lines(vec!["No changes detected.".into()]);
+        let mut buffer = Buffer::empty(area);
+        overlay.render(area, &mut buffer);
+        assert_eq!(overlay.view.scroll_offset, 0);
+        assert!(buffer.content.iter().any(|cell| cell.symbol() == "N"));
     }
 }

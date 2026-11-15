@@ -1,9 +1,12 @@
-//! Task-scoped diff snapshots rendered with the existing pager and sidebar layout.
+//! Task-scoped diffs that refresh while their sidebar is visible.
 
 use super::App;
 use super::sidebar::PaneFocus;
 use super::sidebar::SidebarContent;
 use crate::activation_key_guard::ActivationKeySuppression;
+use crate::app_event::AppEvent;
+use crate::app_event_sender::AppEventSender;
+use crate::get_git_diff::get_git_diff;
 use crate::key_hint::KeyBinding;
 use crate::key_hint::KeyBindingListExt;
 use crate::keymap::PagerKeymap;
@@ -14,6 +17,7 @@ use crate::pager_overlay::StaticOverlay;
 use crate::session_resume::cwds_differ;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
+use crate::workspace_command::WorkspaceCommandRunner;
 use codex_ansi_escape::ansi_escape_line;
 use codex_protocol::ThreadId;
 use color_eyre::eyre::Result;
@@ -25,8 +29,12 @@ use ratatui::layout::Rect;
 use ratatui::text::Line;
 use ratatui::widgets::Widget;
 use std::path::PathBuf;
+use std::time::Duration;
 use std::time::Instant;
+use tokio_util::task::AbortOnDropHandle;
 use uuid::Uuid;
+
+const DIFF_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 
 pub(super) struct DiffPanel {
     request_id: Uuid,
@@ -35,6 +43,10 @@ pub(super) struct DiffPanel {
     panel: bool,
     view: StaticOverlay,
     keymap: PagerKeymap,
+    pending: Option<AbortOnDropHandle<()>>,
+    next_refresh: Instant,
+    snapshot: Option<String>,
+    error: Option<String>,
 }
 
 fn close_area(area: Rect) -> Rect {
@@ -61,11 +73,68 @@ impl DiffPanel {
                 "Changes".into(),
                 keymap,
             ),
+            pending: None,
+            next_refresh: Instant::now(),
+            snapshot: None,
+            error: None,
         }
+    }
+
+    fn refresh(
+        &mut self,
+        request_id: Uuid,
+        runner: Option<WorkspaceCommandRunner>,
+        tx: AppEventSender,
+    ) {
+        self.pending = None;
+        self.request_id = request_id;
+        let thread_id = self.thread_id;
+        let cwd = self.cwd.clone();
+        self.pending = Some(AbortOnDropHandle::new(tokio::spawn(async move {
+            let result = match runner {
+                Some(runner) => {
+                    get_git_diff(runner.as_ref(), &cwd)
+                        .await
+                        .map(|(is_git_repo, text)| {
+                            if is_git_repo {
+                                text
+                            } else {
+                                "`/diff` — _not inside a git repository_".to_owned()
+                            }
+                        })
+                }
+                None => Err("workspace command runner unavailable".to_owned()),
+            };
+            tx.send(AppEvent::DiffResult {
+                request_id,
+                thread_id,
+                cwd,
+                result,
+            });
+        })));
+    }
+
+    pub(super) fn pause_refresh(&mut self) {
+        self.pending = None;
+        self.next_refresh = Instant::now();
     }
 
     pub(super) fn render(&mut self, area: Rect, buffer: &mut Buffer) {
         self.view.render(area, buffer);
+        if self.snapshot.is_some()
+            && area.height >= 6
+            && let Some(error) = &self.error
+        {
+            let footer = Rect::new(area.x, area.bottom() - 1, area.width, 1);
+            Line::from(format!(
+                "Refresh failed: {}",
+                error.replace(char::is_control, " ")
+            ))
+            .style(crate::style::status_style(
+                crate::style::StatusTone::Attention,
+            ))
+            .render(footer, buffer);
+        }
         Line::from(" × ")
             .style(crate::style::secondary_text_style())
             .render(close_area(area), buffer);
@@ -110,7 +179,23 @@ impl App {
         let panel = tui.is_owned_screen()
             && self.local_settings.workspace_enabled(&self.config)
             && !self.conversation_frame.has_caller_inset();
-        let diff = DiffPanel::new(request_id, thread_id, cwd, panel, self.keymap.pager.clone());
+        let mut diff = self
+            .sidebar_mut()
+            .diff
+            .take()
+            .filter(|diff| {
+                panel && diff.panel && diff.thread_id == thread_id && !cwds_differ(&diff.cwd, &cwd)
+            })
+            .unwrap_or_else(|| {
+                DiffPanel::new(request_id, thread_id, cwd, panel, self.keymap.pager.clone())
+            });
+        diff.keymap = self.keymap.pager.clone();
+        diff.view.set_keymap(diff.keymap.clone());
+        diff.refresh(
+            request_id,
+            self.workspace_command_runner.clone(),
+            self.app_event_tx.clone(),
+        );
         let pane = self.sidebar_mut();
         pane.diff = Some(diff);
         if panel {
@@ -126,7 +211,7 @@ impl App {
         request_id: Uuid,
         thread_id: Option<ThreadId>,
         cwd: PathBuf,
-        text: String,
+        result: Result<String, String>,
     ) {
         self.prepare_diff_panel();
         let Some(parent) = self.sidebars.iter().find_map(|(parent, pane)| {
@@ -143,26 +228,82 @@ impl App {
         };
         let active =
             self.sidebar_parent() == parent && self.current_displayed_thread_id() == thread_id;
-        let lines = if text.trim().is_empty() {
-            vec!["No changes detected.".into()]
-        } else {
-            text.lines().map(ansi_escape_line).collect()
-        };
         let pane = self.sidebars.get_mut(&parent).expect("matched diff parent");
         let diff = pane.diff.as_mut().expect("matched diff");
-        let view = StaticOverlay::with_title(lines, "Changes".into(), diff.keymap.clone());
-        if diff.panel {
-            diff.view = view;
-        } else {
-            pane.diff = None;
+        diff.pending = None;
+        diff.next_refresh = Instant::now() + DIFF_REFRESH_INTERVAL;
+        match result {
+            Ok(text) => {
+                if diff.snapshot.as_ref() != Some(&text) {
+                    let lines = if text.trim().is_empty() {
+                        vec!["No changes detected.".into()]
+                    } else {
+                        text.lines().map(ansi_escape_line).collect()
+                    };
+                    diff.view.replace_lines(lines);
+                    diff.snapshot = Some(text);
+                }
+                diff.error = None;
+            }
+            Err(error) => {
+                if diff.snapshot.is_none() {
+                    diff.view.replace_lines(
+                        format!("Failed to compute diff: {error}")
+                            .lines()
+                            .map(ansi_escape_line)
+                            .collect(),
+                    );
+                }
+                diff.error = Some(error);
+            }
+        }
+        if !diff.panel {
+            let diff = pane.diff.take().expect("matched inline diff");
             if active {
                 let _ = tui.enter_alt_screen();
-                self.overlay = Some(Overlay::Static(view));
+                self.overlay = Some(Overlay::Static(diff.view));
             }
         }
         if active {
             self.chat_widget.on_diff_complete();
             tui.frame_requester().schedule_frame();
+        }
+    }
+
+    pub(super) fn refresh_visible_diff(
+        &mut self,
+        frames: &crate::tui::FrameRequester,
+        now: Instant,
+    ) {
+        if self.overlay.is_some()
+            || self.chat_widget.has_active_view()
+            || self
+                .conversation_frame
+                .panel_area()
+                .is_none_or(|area| area.is_empty())
+            || self.sidebar().and_then(|pane| pane.visible_content()) != Some(SidebarContent::Diff)
+        {
+            return;
+        }
+        let parent = self.sidebar_parent();
+        let Some(diff) = self
+            .sidebars
+            .get_mut(&parent)
+            .and_then(|pane| pane.diff.as_mut())
+        else {
+            return;
+        };
+        if !diff.panel || diff.pending.is_some() {
+            return;
+        }
+        if now < diff.next_refresh {
+            frames.schedule_frame_in(diff.next_refresh - now);
+        } else {
+            diff.refresh(
+                Uuid::new_v4(),
+                self.workspace_command_runner.clone(),
+                self.app_event_tx.clone(),
+            );
         }
     }
 

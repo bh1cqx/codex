@@ -6013,7 +6013,7 @@ async fn change_directory_scenario() -> Result<()> {
         request_id: uuid::Uuid::new_v4(),
         thread_id: Some(original),
         cwd: current.clone(),
-        text: "stale diff".to_string(),
+        result: Ok("stale diff".to_string()),
     };
     let branch = AppEvent::SyncThreadGitBranch {
         thread_id: original,

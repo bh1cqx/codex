@@ -295,6 +295,7 @@ impl App {
         let mut prepared =
             self.prepare_conversation(screen_size.into(), caller_inset.or(live), &frames);
         self.conversation_frame.sidebar = layout;
+        self.refresh_visible_diff(&frames, std::time::Instant::now());
         self.conversation_frame.chat_strip = strip;
         self.conversation_frame.sidebar_input =
             self.sidebar().map(sidebar::SidebarPane::input_state);

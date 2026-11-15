@@ -506,6 +506,9 @@ impl SidebarPane {
             files.scan = None;
         }
         self.focus = None;
+        if let Some(diff) = &mut self.diff {
+            diff.pause_refresh();
+        }
     }
 
     pub(super) fn remove_chat(&mut self, id: ThreadId, storage: SideChatStorage) {
