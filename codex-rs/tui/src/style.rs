@@ -116,11 +116,8 @@ pub(crate) fn status_header_style() -> Style {
     let Some(background) = background_rgb(surface.bg) else {
         return surface;
     };
-    surface.bg(best_color(blend(
-        (175, 95, 255),
-        background,
-        /*alpha*/ 0.65,
-    )))
+    let alpha = if is_light(background) { 0.25 } else { 0.85 };
+    surface.bg(best_color(blend((95, 0, 135), background, alpha)))
 }
 
 // These grays are exact entries in the xterm extended palette and have 8.4:1 contrast.
