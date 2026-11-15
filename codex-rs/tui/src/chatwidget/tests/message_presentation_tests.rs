@@ -26,6 +26,31 @@ fn start(chat: &mut ChatWidget, id: &str, text: &str, phase: Option<MessagePhase
 }
 
 #[tokio::test]
+async fn conversation_live_lines_filter_progress_and_keep_answer_text() {
+    for (phase, visible) in [
+        (None, true),
+        (Some(MessagePhase::Commentary), false),
+        (Some(MessagePhase::PartialAnswer), true),
+        (Some(MessagePhase::FinalAnswer), true),
+    ] {
+        let (mut chat, _rx, _ops) = make_chatwidget_manual(None).await;
+        handle_turn_started(&mut chat, "turn-1");
+        start(&mut chat, "msg-1", "", phase);
+        handle_agent_message_delta(&mut chat, "Streaming response");
+        let lines = chat.active_conversation_lines(60);
+        assert_eq!(lines.is_some(), visible);
+        if let Some(lines) = lines {
+            assert!(
+                lines
+                    .iter()
+                    .any(|line| line.line.to_string().contains("Streaming response"))
+            );
+        }
+        assert!(chat.active_cell_transcript_hyperlink_lines(60).is_some());
+    }
+}
+
+#[tokio::test]
 async fn message_presentation_carries_phase_from_empty_start_through_replay() {
     for (phase, prefix) in [
         (None, "• "),

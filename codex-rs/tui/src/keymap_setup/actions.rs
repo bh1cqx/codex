@@ -137,6 +137,9 @@ define_keymap_actions! {
         open_agents => "Open the agent command center.",
         open_transcript => "Open the transcript overlay.",
         find_transcript => "Find text in the full transcript.",
+        previous_answer => "Jump to the previous teal answer.",
+        next_answer => "Jump to the next teal answer.",
+        toggle_answers_only => "Show prompts and answers, or restore the normal view.",
         // Keep the new warnings action out of shared-config writes until older strict readers
         // accept it. Its built-in shortcuts remain available.
         focus_activity => "Focus transcript activity groups to expand or collapse their details.",

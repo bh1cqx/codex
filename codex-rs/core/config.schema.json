@@ -5644,15 +5644,18 @@
               "minimize_pane_width": null,
               "move_divider_left": null,
               "move_divider_right": null,
+              "next_answer": null,
               "open_agents": null,
               "open_external_editor": null,
               "open_transcript": null,
+              "previous_answer": null,
               "queue": null,
               "resize_panes": null,
               "select_transcript": null,
               "sidebar_down": null,
               "sidebar_up": null,
               "submit": null,
+              "toggle_answers_only": null,
               "toggle_fast_mode": null,
               "toggle_pane_zoom": null,
               "toggle_raw_output": null,
@@ -6686,6 +6689,14 @@
           ],
           "description": "Move the divider right when the side pane has focus."
         },
+        "next_answer": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/KeybindingsSpec"
+            }
+          ],
+          "description": "Jump to the next final or partial answer."
+        },
         "open_agents": {
           "allOf": [
             {
@@ -6709,6 +6720,14 @@
             }
           ],
           "description": "Open the transcript overlay."
+        },
+        "previous_answer": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/KeybindingsSpec"
+            }
+          ],
+          "description": "Jump to the previous final or partial answer."
         },
         "queue": {
           "allOf": [
@@ -6757,6 +6776,14 @@
             }
           ],
           "description": "Submit the current composer draft."
+        },
+        "toggle_answers_only": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/KeybindingsSpec"
+            }
+          ],
+          "description": "Toggle prompts and answers without tool activity or progress messages."
         },
         "toggle_fast_mode": {
           "allOf": [
@@ -6945,15 +6972,18 @@
             "minimize_pane_width": null,
             "move_divider_left": null,
             "move_divider_right": null,
+            "next_answer": null,
             "open_agents": null,
             "open_external_editor": null,
             "open_transcript": null,
+            "previous_answer": null,
             "queue": null,
             "resize_panes": null,
             "select_transcript": null,
             "sidebar_down": null,
             "sidebar_up": null,
             "submit": null,
+            "toggle_answers_only": null,
             "toggle_fast_mode": null,
             "toggle_pane_zoom": null,
             "toggle_raw_output": null,

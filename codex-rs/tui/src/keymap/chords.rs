@@ -133,6 +133,14 @@ impl KeymapContextSet {
         Self(self.0 | TRANSCRIPT_SELECT)
     }
 
+    pub(crate) const fn transcript_search() -> Self {
+        Self(
+            context_bit(KeymapContext::Editor)
+                | context_bit(KeymapContext::Global)
+                | TRANSCRIPT_ACTIONS,
+        )
+    }
+
     pub(crate) const fn without_session_tabs(self) -> Self {
         Self(self.0 | SESSION_TABS_BLOCKED)
     }
@@ -287,6 +295,11 @@ impl KeymapContextSet {
             };
             return self.0 & required != 0;
         }
+        if action.is_conversation_navigation() {
+            return self.contains(KeymapContext::Global)
+                && (!self.contains(KeymapContext::List) || self.0 & ACTIVITY_FOCUS != 0)
+                && !self.is_warnings();
+        }
         if action.context == KeymapContext::Chat && action.action == "open_presets" {
             return self.contains(KeymapContext::Chat)
                 && self.contains(KeymapContext::Global)
@@ -311,7 +324,8 @@ impl KeymapContextSet {
                 || matches!(action.action, "open_transcript" | "select_transcript"))
             && (self.0 & TRANSCRIPT_ACTIONS == 0
                 || action.context != KeymapContext::Global
-                || matches!(action.action, "find_transcript" | "select_transcript"))
+                || (!self.contains(KeymapContext::Editor)
+                    && matches!(action.action, "find_transcript" | "select_transcript")))
             && (!self.is_warnings()
                 || action.context != KeymapContext::List
                 || action.action != "accept")

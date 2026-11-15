@@ -208,6 +208,14 @@ pub(crate) fn plain_lines(lines: impl IntoIterator<Item = Line<'static>>) -> Vec
 /// heights when they apply additional layout logic beyond what
 /// `Paragraph::line_count` captures.
 pub(crate) trait HistoryCell: std::fmt::Debug + Send + Sync + Any {
+    fn is_answer(&self) -> bool {
+        false
+    }
+
+    fn is_conversation_message(&self) -> bool {
+        self.is_answer()
+    }
+
     /// Retain reasoning inside an activity group, or return it for normal insertion.
     /// Call positions stay fixed as in-flight calls complete; other history cells decline it.
     fn append_reasoning(&mut self, cell: Box<dyn HistoryCell>) -> Result<(), Box<dyn HistoryCell>> {

@@ -137,7 +137,8 @@ impl App {
                 (close
                     && action.context == crate::keymap::KeymapContext::Pager
                     && action.action == "close_transcript")
-                    || (action.is_side_pane() && contexts.contains_action(action))
+                    || ((action.is_side_pane() || action.is_conversation_navigation())
+                        && contexts.contains_action(action))
             };
             let chord = match self.key_chord_matcher.clone().advance(
                 key_event,
@@ -291,7 +292,7 @@ impl App {
         if let Some(overlay) = &self.overlay {
             let contexts = match overlay.input_transcript() {
                 Some(view) if view.is_search_editing() => {
-                    KeymapContextSet::new(KeymapContext::Editor)
+                    KeymapContextSet::transcript_search()
                 }
                 Some(view) if view.is_select_mode() => {
                     KeymapContextSet::transcript().with_transcript_select()
@@ -316,7 +317,7 @@ impl App {
             return KeymapContextSet::new(KeymapContext::Pager);
         }
         if self.transcript_view.is_search_editing() && self.chat_widget.no_modal_or_popup_active() {
-            return KeymapContextSet::new(KeymapContext::Editor).with_voice_toggle(&self.keymap);
+            return KeymapContextSet::transcript_search().with_voice_toggle(&self.keymap);
         }
         if self.transcript_view.is_select_mode() && self.chat_widget.no_modal_or_popup_active() {
             return KeymapContextSet::transcript()

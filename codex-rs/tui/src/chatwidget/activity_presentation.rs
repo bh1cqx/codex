@@ -9,6 +9,21 @@ impl ChatWidget {
         self.transcript.active_cell.as_deref()
     }
 
+    pub(crate) fn active_conversation_lines(&self, width: u16) -> Option<Vec<HyperlinkLine>> {
+        self.active_cell_hyperlink_lines_with(width, |cell, width| {
+            if cell.is_conversation_message() {
+                history_cell::fullscreen_session_lines(
+                    cell,
+                    width,
+                    /*detailed*/ true,
+                    self.history_render_mode(),
+                )
+            } else {
+                Vec::new()
+            }
+        })
+    }
+
     /// Render only the chosen activity presentation, before any auxiliary live text.
     pub(crate) fn active_cell_owned_transcript_lines(
         &self,

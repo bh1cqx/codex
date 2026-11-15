@@ -83,34 +83,35 @@ impl App {
             .any(|bindings| bindings.is_pressed(key_event));
         let active_action = |action: crate::keymap::KeymapActionId| {
             contexts.contains_action(action)
-                && if search_editing {
-                    action.context == crate::keymap::KeymapContext::Editor
-                        || matches!(
-                            (action.context, action.action),
-                            (crate::keymap::KeymapContext::Chat, "toggle_voice")
-                        )
-                } else {
-                    matches!(
-                        (action.context, action.action),
-                        (crate::keymap::KeymapContext::Global, "find_transcript")
-                            | (crate::keymap::KeymapContext::Chat, "toggle_voice")
-                            | (
-                                crate::keymap::KeymapContext::Pager,
-                                "find"
-                                    | "scroll_up"
-                                    | "scroll_down"
-                                    | "page_up"
-                                    | "page_down"
-                                    | "half_page_up"
-                                    | "half_page_down"
-                                    | "jump_top"
-                                    | "jump_bottom"
-                                    | "mark_markdown"
+                && (action.is_conversation_navigation()
+                    || if search_editing {
+                        action.context == crate::keymap::KeymapContext::Editor
+                            || matches!(
+                                (action.context, action.action),
+                                (crate::keymap::KeymapContext::Chat, "toggle_voice")
                             )
-                    ) || (self.overlay.is_some()
-                        && action.context == crate::keymap::KeymapContext::Pager
-                        && matches!(action.action, "close" | "close_transcript"))
-                }
+                    } else {
+                        matches!(
+                            (action.context, action.action),
+                            (crate::keymap::KeymapContext::Global, "find_transcript")
+                                | (crate::keymap::KeymapContext::Chat, "toggle_voice")
+                                | (
+                                    crate::keymap::KeymapContext::Pager,
+                                    "find"
+                                        | "scroll_up"
+                                        | "scroll_down"
+                                        | "page_up"
+                                        | "page_down"
+                                        | "half_page_up"
+                                        | "half_page_down"
+                                        | "jump_top"
+                                        | "jump_bottom"
+                                        | "mark_markdown"
+                                )
+                        ) || (self.overlay.is_some()
+                            && action.context == crate::keymap::KeymapContext::Pager
+                            && matches!(action.action, "close" | "close_transcript"))
+                    })
         };
         let completed_action = |dispatch| {
             self.keymap.chords.bindings.iter().any(|binding| {

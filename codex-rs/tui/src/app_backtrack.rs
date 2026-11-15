@@ -430,12 +430,20 @@ impl App {
             let active_key = self.chat_widget.active_cell_transcript_key();
             let chat_widget = &self.chat_widget;
             let detailed = t.is_detailed();
+            let answers_only = t.is_answers_only();
+            t.set_live_answer(chat_widget.active_activity_cell());
             let size = tui.prepare_draw_size()?;
             t.sync_search_live_tail(size.width.max(/*other*/ 1), active_key, |width| {
-                chat_widget.active_cell_transcript_hyperlink_lines(width)
+                if answers_only {
+                    chat_widget.active_conversation_lines(width)
+                } else {
+                    chat_widget.active_cell_transcript_hyperlink_lines(width)
+                }
             });
             t.sync_live_tail(size.width.max(/*other*/ 1), active_key, |width| {
-                if detailed {
+                if answers_only {
+                    chat_widget.active_conversation_lines(width)
+                } else if detailed {
                     chat_widget.active_cell_transcript_hyperlink_lines(width)
                 } else {
                     chat_widget

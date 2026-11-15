@@ -297,6 +297,11 @@ impl TranscriptView {
         enabled: bool,
         active: Option<&dyn HistoryCell>,
     ) -> (Option<TurnRow>, bool) {
+        self.set_live_answer(active);
+        if self.answers_only {
+            self.disclosure.live_ids.clear();
+            return (None, false);
+        }
         self.sync_turn_details(cells, enabled, active);
         let summary = self.turn_row(cells, cells.len());
         let ids = summary.as_ref().map_or_else(
@@ -390,7 +395,7 @@ impl TranscriptView {
     }
 
     pub(crate) fn turn_row(&self, cells: &[Arc<dyn HistoryCell>], index: usize) -> Option<TurnRow> {
-        if self.detailed || self.mode != HistoryRenderMode::Rich {
+        if self.answers_only || self.detailed || self.mode != HistoryRenderMode::Rich {
             return None;
         }
         let details = self.turn_details.as_ref()?;

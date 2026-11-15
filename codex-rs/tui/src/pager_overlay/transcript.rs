@@ -60,6 +60,14 @@ impl TranscriptOverlay {
         self.view.is_detailed()
     }
 
+    pub(crate) fn is_answers_only(&self) -> bool {
+        self.view.is_answers_only()
+    }
+
+    pub(crate) fn set_live_answer(&mut self, active: Option<&dyn HistoryCell>) {
+        self.view.set_live_answer(active);
+    }
+
     pub(crate) fn new(cells: Vec<Arc<dyn HistoryCell>>, keymap: PagerKeymap) -> Self {
         let mut view = TranscriptView::default();
         view.set_presentation(/*detailed*/ true, HistoryRenderMode::Rich);
@@ -459,6 +467,11 @@ impl TranscriptOverlay {
     fn handle_key(&mut self, key: KeyEvent) -> Option<ViewAction> {
         if key.kind == KeyEventKind::Release {
             return None;
+        }
+        if let Some(action) = self.view.handle_conversation_key(key, &self.cells) {
+            self.pending_highlight = None;
+            self.pending_select_mode = false;
+            return Some(action);
         }
         if !self.view.is_search_editing()
             && !self.view.is_select_mode()

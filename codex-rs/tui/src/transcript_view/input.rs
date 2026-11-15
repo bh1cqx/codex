@@ -290,6 +290,9 @@ impl TranscriptView {
         if key.kind == KeyEventKind::Release {
             return None;
         }
+        if let Some(action) = self.handle_conversation_key(key, cells) {
+            return Some(action);
+        }
         if let Some(action) = self.handle_copy_mode_key(key, cells) {
             return Some(action);
         }
