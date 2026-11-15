@@ -350,6 +350,11 @@ impl App {
         } else {
             contexts
         };
+        let contexts = if self.session_tabs_available() {
+            contexts
+        } else {
+            contexts.without_session_tabs()
+        };
         contexts.with_voice_toggle(&self.keymap)
     }
 

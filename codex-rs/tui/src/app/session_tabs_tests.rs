@@ -162,6 +162,14 @@ fn overflow_keeps_selected_tab_visible_and_last_session_tracks_displayed_threads
 #[test]
 fn session_tab_keys_are_remappable_and_yield_to_existing_custom_bindings() {
     let defaults = RuntimeKeymap::from_config(&TuiKeymap::default()).unwrap();
+    assert_eq!(
+        defaults.chat.session_tab_previous.first(),
+        Some(&crate::key_hint::alt(KeyCode::Char('h')))
+    );
+    assert_eq!(
+        defaults.chat.session_tab_next.first(),
+        Some(&crate::key_hint::alt(KeyCode::Char('l')))
+    );
     assert!(
         defaults
             .chat
@@ -174,8 +182,10 @@ fn session_tab_keys_are_remappable_and_yield_to_existing_custom_bindings() {
             .toggle_session_pin
             .is_pressed(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT))
     );
-    let config: TuiKeymap =
-        toml::from_str("[chat]\nsession_tab_next = 'f12'\ntoggle_voice = 'alt-p'\n").unwrap();
+    let config: TuiKeymap = toml::from_str(
+        "[global]\nclear_terminal = 'alt-h'\n[chat]\nsession_tab_next = 'f12'\ntoggle_voice = 'alt-p'\n",
+    )
+    .unwrap();
     let customized = RuntimeKeymap::from_config(&config).unwrap();
     assert!(
         customized
@@ -188,6 +198,24 @@ fn session_tab_keys_are_remappable_and_yield_to_existing_custom_bindings() {
             .chat
             .session_tab_next
             .is_pressed(KeyEvent::new(KeyCode::PageDown, KeyModifiers::ALT))
+    );
+    assert!(
+        !customized
+            .chat
+            .session_tab_next
+            .is_pressed(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT))
+    );
+    assert!(
+        !customized
+            .chat
+            .session_tab_previous
+            .is_pressed(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::ALT))
+    );
+    assert!(
+        customized
+            .chat
+            .session_tab_previous
+            .is_pressed(KeyEvent::new(KeyCode::PageUp, KeyModifiers::ALT))
     );
     assert!(customized.chat.toggle_session_pin.is_empty());
 }
@@ -268,11 +296,24 @@ async fn session_tab_shortcuts_preserve_drafts_and_emit_native_pin_action() -> R
     app.handle_tui_event(
         &mut tui,
         &mut server,
-        TuiEvent::Key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::ALT)),
+        TuiEvent::Key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::ALT)),
     )
     .await?;
     assert_eq!(app.current_displayed_thread_id(), Some(second_id));
     app.chat_widget.apply_external_edit("second draft".into());
+    for (key, id, draft) in [
+        ('h', first_id, "first draft"),
+        ('l', second_id, "second draft"),
+    ] {
+        app.handle_tui_event(
+            &mut tui,
+            &mut server,
+            TuiEvent::Key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::ALT)),
+        )
+        .await?;
+        assert_eq!(app.current_displayed_thread_id(), Some(id));
+        assert_eq!(app.chat_widget.composer_text_with_pending(), draft);
+    }
     for (id, draft) in [(first_id, "first draft"), (second_id, "second draft")] {
         app.handle_tui_event(
             &mut tui,
