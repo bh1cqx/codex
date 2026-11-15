@@ -506,6 +506,13 @@ impl ChatWidget {
                     .current_cwd
                     .clone()
                     .unwrap_or_else(|| self.config.cwd.to_path_buf());
+                let request_id = uuid::Uuid::new_v4();
+                let thread_id = self.thread_id;
+                tx.send(AppEvent::DiffStarted {
+                    request_id,
+                    thread_id,
+                    cwd: cwd.clone(),
+                });
                 tokio::spawn(async move {
                     let text = match runner {
                         Some(runner) => match get_git_diff(runner.as_ref(), &cwd).await {
@@ -521,7 +528,12 @@ impl ChatWidget {
                         None => "Failed to compute diff: workspace command runner unavailable"
                             .to_string(),
                     };
-                    tx.send(AppEvent::DiffResult(cwd, text));
+                    tx.send(AppEvent::DiffResult {
+                        request_id,
+                        thread_id,
+                        cwd,
+                        text,
+                    });
                 });
             }
             SlashCommand::Mention => {

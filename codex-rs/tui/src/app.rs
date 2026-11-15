@@ -93,7 +93,6 @@ use crate::update_action::UpdateAction;
 use crate::version::CODEX_CLI_VERSION;
 use crate::workspace_command::AppServerWorkspaceCommandRunner;
 use crate::workspace_command::WorkspaceCommandRunner;
-use codex_ansi_escape::ansi_escape_line;
 use codex_app_server_client::AppServerRequestHandle;
 use codex_app_server_client::TypedRequestError;
 use codex_app_server_protocol::AddCreditsNudgeCreditType;
@@ -210,6 +209,7 @@ pub(crate) mod agents_overview_discovery;
 mod agents_overview_threads;
 mod agents_overview_usage;
 mod agents_overview_view;
+mod diff_panel;
 pub(crate) use agents_overview::AGENTS_OVERVIEW_VIEW_ID;
 mod activity_groups;
 mod app_server_event_targets;
@@ -1070,7 +1070,7 @@ impl App {
         }
         if self.reconnect.offline
             && !transcript_owns_input
-            && self.chooser_focus() != Some(sidebar::PaneFocus::Sidebar)
+            && self.panel_focus() != Some(sidebar::PaneFocus::Sidebar)
             && !self.chat_widget.keymap_contexts().is_warnings()
             && !self
                 .chat_widget
@@ -1152,6 +1152,9 @@ impl App {
         };
 
         if Box::pin(self.handle_session_tabs_event(tui, app_server, &event)).await {
+            return Ok(AppRunControl::Continue);
+        }
+        if self.handle_diff_panel_event(tui, &event)? {
             return Ok(AppRunControl::Continue);
         }
         if let TuiEvent::Key(key) = &event

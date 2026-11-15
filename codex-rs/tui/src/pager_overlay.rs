@@ -200,6 +200,9 @@ impl PagerView {
     }
 
     fn render(&mut self, area: Rect, buf: &mut Buffer) {
+        if area.width == 0 || area.height < 2 {
+            return;
+        }
         Clear.render(area, buf);
         self.render_header(area, buf);
         let content_area = self.content_area(area);
@@ -230,10 +233,10 @@ impl PagerView {
             let height = renderable.desired_height(area.width) as isize;
             y += height;
             let bottom = y;
-            if bottom < area.y as isize {
+            if bottom < 0 {
                 continue;
             }
-            if top > area.y as isize + area.height as isize {
+            if top > area.height as isize {
                 break;
             }
             if top < 0 {
@@ -284,6 +287,9 @@ impl PagerView {
         };
         let pct_text = format!(" {percent}% ");
         let pct_w = pct_text.chars().count() as u16;
+        if pct_w >= sep_rect.width {
+            return;
+        }
         let pct_x = sep_rect.x + sep_rect.width - pct_w - 1;
         Span::from(pct_text)
             .dim()
@@ -454,9 +460,15 @@ impl StaticOverlay {
     }
 
     fn render_hints(&self, area: Rect, buf: &mut Buffer) {
+        if area.is_empty() {
+            return;
+        }
         let line1 = Rect::new(area.x, area.y, area.width, 1);
-        let line2 = Rect::new(area.x, area.y.saturating_add(1), area.width, 1);
         render_navigation_hints(line1, buf, &self.view.keymap);
+        if area.height < 2 {
+            return;
+        }
+        let line2 = Rect::new(area.x, area.y.saturating_add(1), area.width, 1);
         let mut pairs = vec![(
             first_or_empty(&self.view.keymap, "close", &self.view.keymap.close),
             "close",
@@ -470,9 +482,13 @@ impl StaticOverlay {
     pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer) {
         let top_h = area.height.saturating_sub(Self::HINTS_HEIGHT);
         let top = Rect::new(area.x, area.y, area.width, top_h);
-        let bottom = Rect::new(area.x, area.y + top_h, area.width, Self::HINTS_HEIGHT);
+        let bottom = Rect::new(area.x, area.y + top_h, area.width, area.height - top_h);
         self.view.render(top, buf);
         self.render_hints(bottom, buf);
+    }
+
+    pub(crate) fn scroll_lines(&mut self, rows: isize) {
+        self.view.scroll_offset = self.view.scroll_offset.saturating_add_signed(rows);
     }
 }
 

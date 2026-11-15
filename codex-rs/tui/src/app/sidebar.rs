@@ -32,6 +32,7 @@ pub(super) enum SidebarContent {
     Chat(ThreadId),
     Document(uuid::Uuid),
     Subagents,
+    Diff,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,6 +89,7 @@ pub(super) struct SidebarInputState {
 
 #[derive(Default)]
 pub(super) struct SidebarPane {
+    pub(super) diff: Option<super::diff_panel::DiffPanel>,
     pub(super) creation: Option<SideCreation>,
     pub(super) close: Option<super::sidebar_close::Confirmation>,
     pub(super) files: Option<super::sidebar_files::Files>,
@@ -187,7 +189,10 @@ impl SidebarPane {
                 }
                 self.visit(SidebarTab::Subagents);
             }
-            SidebarContent::Chooser => {}
+            SidebarContent::Chooser | SidebarContent::Diff => {}
+        }
+        if content != SidebarContent::Diff {
+            self.diff = None;
         }
         if content != SidebarContent::Chooser || focus == PaneFocus::Main {
             self.opening = None;
@@ -556,6 +561,10 @@ impl SidebarPane {
     pub(super) fn visible_content(&self) -> Option<SidebarContent> {
         self.focus.map(|_| self.content)
     }
+
+    pub(super) fn is_diff(&self) -> bool {
+        self.content == SidebarContent::Diff
+    }
 }
 
 impl App {
@@ -796,6 +805,13 @@ pub(super) fn content_layout(
         }),
         SidebarContent::Chat(child) => {
             side_pane::pair_layout(app, child, [main, sidebar]).map(SidebarLayout::Chat)
+        }
+        SidebarContent::Diff => {
+            (!app.chat_widget.has_active_view()).then_some(SidebarLayout::Panel {
+                main,
+                sidebar,
+                focus,
+            })
         }
     }
 }
