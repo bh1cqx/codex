@@ -60,7 +60,7 @@ Remove `status_header` or set it to `[]` to hide it. Restart the TUI after editi
 
 Pin a task with **Alt+P** to show session tabs below the status header in fullscreen chat. Tabs use the same pinned tasks as the agent command center and remain hidden in that view. The current task appears alongside pinned tasks, even when it is not pinned.
 
-* **Alt+PageUp / Alt+PageDown:** switch between tabs.
+* **Alt+H / Alt+L:** switch to the previous or next tab. Alt+PageUp / Alt+PageDown remain aliases.
 * **Alt+backtick:** return to the last viewed session.
 * **Alt+P** or the star button: pin or unpin the current task.
 * Click a tab to open it. Overflow arrows reveal other tabs.

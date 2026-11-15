@@ -66,6 +66,7 @@ const FOCUSED_SIDEBAR: u64 = 1 << 29;
 const TRANSCRIPT_SELECT: u64 = 1 << 30;
 const COMPOSER_EDIT_ONLY: u64 = 1 << 31;
 const CLOUD_ENVIRONMENT_SELECTION: u64 = 1 << 32;
+const SESSION_TABS_BLOCKED: u64 = 1 << 33;
 
 const TRANSCRIPT_BROWSING: u64 = 1 << 14;
 
@@ -124,6 +125,10 @@ impl KeymapContextSet {
     /// Enable Markdown marking while the transcript owns the selection caret.
     pub(crate) const fn with_transcript_select(self) -> Self {
         Self(self.0 | TRANSCRIPT_SELECT)
+    }
+
+    pub(crate) const fn without_session_tabs(self) -> Self {
+        Self(self.0 | SESSION_TABS_BLOCKED)
     }
 
     /// Warning pages admit navigation plus their own toggle and copy.
@@ -241,6 +246,18 @@ impl KeymapContextSet {
                 "choose_cloud_environment" => return self.0 & CLOUD_ENVIRONMENT_SELECTION != 0,
                 _ => {}
             }
+        }
+        if action.context == KeymapContext::Chat
+            && matches!(
+                action.action,
+                "session_tab_previous"
+                    | "session_tab_next"
+                    | "session_tab_last"
+                    | "toggle_session_pin"
+            )
+            && self.0 & SESSION_TABS_BLOCKED != 0
+        {
+            return false;
         }
         if action.is_side_pane() {
             let required = match action.action {

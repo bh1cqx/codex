@@ -1956,8 +1956,14 @@ impl RuntimeKeymap {
             },
             chords: Arc::default(),
             chat: ChatKeymap {
-                session_tab_previous: default_bindings![alt(KeyCode::PageUp)],
-                session_tab_next: default_bindings![alt(KeyCode::PageDown)],
+                session_tab_previous: default_bindings![
+                    alt(KeyCode::Char('h')),
+                    alt(KeyCode::PageUp)
+                ],
+                session_tab_next: default_bindings![
+                    alt(KeyCode::Char('l')),
+                    alt(KeyCode::PageDown)
+                ],
                 session_tab_last: default_bindings![alt(KeyCode::Char('`'))],
                 toggle_session_pin: default_bindings![alt(KeyCode::Char('p'))],
                 open_presets: Vec::new(),
