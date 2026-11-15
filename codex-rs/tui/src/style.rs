@@ -118,9 +118,9 @@ pub(crate) fn status_header_style() -> Style {
         return surface;
     };
     surface.bg(best_color(blend(
-        (255, 255, 255),
+        (175, 95, 255),
         background,
-        /*alpha*/ 0.08,
+        /*alpha*/ 0.65,
     )))
 }
 
