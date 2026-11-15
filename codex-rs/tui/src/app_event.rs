@@ -1090,12 +1090,12 @@ pub(crate) enum AppEvent {
         thread_id: Option<ThreadId>,
         cwd: PathBuf,
     },
-    /// Result of computing a `/diff` command.
+    /// Result of opening or refreshing the workspace diff.
     DiffResult {
         request_id: uuid::Uuid,
         thread_id: Option<ThreadId>,
         cwd: PathBuf,
-        text: String,
+        result: Result<String, String>,
     },
 
     /// Open the app link view in the bottom pane.

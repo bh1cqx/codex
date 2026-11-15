@@ -77,7 +77,9 @@ Remap the shortcuts with `session_tab_previous`, `session_tab_next`, `session_ta
 
 ## Diff side panel
 
-`/diff` opens a read-only Changes panel beside fullscreen chat. It includes tracked and untracked changes and uses the existing workspace command runner. Run `/diff` again to refresh the snapshot.
+`/diff` opens a read-only Changes panel beside fullscreen chat. It includes tracked and untracked changes and uses the existing workspace command runner.
+
+While visible, the panel refreshes about every two seconds, including edits made outside Codex. Refreshes keep the current diff, scroll position, and keyboard focus. Automatic refreshes run one at a time. Run `/diff` again for an immediate refresh. A failed refresh keeps the last successful diff and shows an error while retrying. Hiding the panel stops further refreshes.
 
 Click the conversation to keep typing, or click the panel to use the usual pager shortcuts. The mouse wheel scrolls the panel. Press **q** or **Ctrl+C** while the panel has focus, or click **×**, to close it. Closing the diff leaves side conversations intact.
 
