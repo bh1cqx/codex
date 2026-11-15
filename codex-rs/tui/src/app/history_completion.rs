@@ -21,7 +21,6 @@ pub(super) fn group_turn_items<'a>(
         .find_map(|turn| turn.items.first().map(|item| (turn.id.as_str(), item.id())));
     // Itemless interruptions follow the preceding turn, or precede the first item in history.
     let mut end = first.filter(|key| offsets.get(key) == Some(&1)).map(|_| 0);
-    let mut start = 0;
     let mut groups = Vec::new();
     for turn in turns {
         if let Some(last) = turn.items.last() {
@@ -31,10 +30,16 @@ pub(super) fn group_turn_items<'a>(
         {
             continue;
         }
-        if let Some(end) = end.filter(|end| *end >= start) {
-            groups.push((start..end, Some(turn)));
-            start = end;
+        if let Some(end) = end {
+            groups.push((0..end, Some(turn)));
         }
+    }
+    // Stable ties keep itemless interruptions after the turn they follow.
+    groups.sort_by_key(|(range, _)| range.end);
+    let mut start = 0;
+    for (range, _) in &mut groups {
+        range.start = start;
+        start = range.end;
     }
     if start < items.len() {
         groups.push((start..items.len(), None));

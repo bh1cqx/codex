@@ -64,6 +64,81 @@ fn user_cell(message: &str) -> Arc<dyn HistoryCell> {
 }
 
 #[tokio::test]
+async fn answers_only_paging_preserves_interleaved_turn_items() {
+    let mut app = make_test_app().await;
+    app.transcript_cells = vec![
+        user_cell("recent prompt"),
+        Arc::new(crate::history_cell::PlainHistoryCell::new(
+            (0..40)
+                .map(|index| format!("tool output {index}").into())
+                .collect(),
+        )),
+    ];
+    app.transcript_view.history = TranscriptHistoryState::Partial;
+    let area = ratatui::layout::Rect::new(0, 0, 80, 8);
+    app.transcript_view.render(
+        area,
+        &mut ratatui::buffer::Buffer::empty(area),
+        &app.transcript_cells,
+    );
+    assert!(!app.transcript_view.needs_history(&app.transcript_cells));
+    app.transcript_view.handle_key(
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('a'),
+            crossterm::event::KeyModifiers::ALT,
+        ),
+        &app.transcript_cells,
+    );
+    assert!(app.transcript_view.is_answers_only());
+    assert!(app.transcript_view.needs_history(&app.transcript_cells));
+
+    let items = (0..69)
+        .map(|index| ThreadItemPayload::UserMessage {
+            id: format!("item-{index}"),
+            client_id: None,
+            content: vec![UserInput::Text {
+                text: format!("prompt-{index}"),
+                text_elements: Vec::new(),
+            }],
+        })
+        .collect::<Vec<_>>();
+    let mut parent = turn("parent", TurnStatus::Completed, &[]);
+    parent.items = items
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index != 65)
+        .map(|(_, item)| ThreadItem::untimed(item.clone()))
+        .collect();
+    let mut follow_up = turn("follow-up", TurnStatus::Completed, &[]);
+    follow_up.root_turn_id = Some(parent.id.clone());
+    follow_up.items = vec![ThreadItem::untimed(items[65].clone())];
+    let cwd = app.config.cwd.clone();
+    let (cells, _) = app.project_older_history_cells(
+        items.into_iter().enumerate().map(|(index, item)| {
+            let turn = if index == 65 { &follow_up } else { &parent };
+            (turn.id.clone(), item)
+        }).collect(),
+        &[parent, follow_up],
+        &HashSet::new(),
+        ThreadId::new(),
+        &cwd,
+        RawReasoningVisibility::Hidden,
+        /*relocate_split_images*/ false,
+    );
+    let prompts = cells
+        .iter()
+        .filter_map(|cell| cell.as_any().downcast_ref::<UserHistoryCell>())
+        .map(|cell| cell.message.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        prompts,
+        (0..69)
+            .map(|index| format!("prompt-{index}"))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
 async fn fork_lineage_stays_before_repeated_older_history_pages() {
     let mut app = make_test_app().await;
     app.transcript_cells = vec![
