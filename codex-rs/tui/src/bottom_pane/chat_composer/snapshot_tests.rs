@@ -58,6 +58,10 @@ fn shortcut_footer_displays_configured_chords() {
     config.editor.insert_newline = Some(KeybindingsSpec::One(KeybindingSpec(
         "ctrl-x enter".to_string(),
     )));
+    config.global.previous_answer = Some(KeybindingsSpec::One(KeybindingSpec("f6".to_string())));
+    config.global.next_answer = Some(KeybindingsSpec::Many(Vec::new()));
+    config.global.toggle_answers_only =
+        Some(KeybindingsSpec::One(KeybindingSpec("ctrl-x a".to_string())));
     let keymap = RuntimeKeymap::from_config(&config).expect("valid composer chords");
     let (mut composer, _rx) = new_test_composer();
     composer.set_keymap_bindings(&keymap);

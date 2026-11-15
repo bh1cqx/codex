@@ -179,6 +179,9 @@ fn bindings(props: &FooterProps) -> [(&'static str, Vec<Entry>); 3] {
     let alt_shift = KeyModifiers::ALT | KeyModifiers::SHIFT;
     let transcript = vec![
         Entry::hint(hints.show_transcript, "Open transcript"),
+        Entry::hint(hints.toggle_answers_only, "Answers / full"),
+        Entry::hint(hints.previous_answer, "Previous answer"),
+        Entry::hint(hints.next_answer, "Next answer"),
         Entry::hint(hints.find_transcript, "Find text"),
         Entry::pair(
             "Scroll",
