@@ -33,21 +33,26 @@ The "Current status line" preset supports single-line layouts only.
 
 ## Status header
 
-Add `status_header` under `[tui]` in `~/.codex/multiline.config.toml` to show a compact row above the prompt:
+Add `status_header` under `[tui]` in `~/.codex/multiline.config.toml` to pin a compact row above the conversation. This example keeps the model and context in the header and uses one footer row:
 
 ```toml
 [tui]
 status_header = [
   "model-with-reasoning",
+  "context-used",
   "current-dir",
   "git-branch",
-  "context-used",
   "five-hour-limit",
   "weekly-limit",
 ]
+status_line_rows = [
+  ["run-state", "task-progress", "approval-mode", "thread-name"],
+]
 ```
 
-The header uses the same item identifiers and theme colors as the footer. Its selection is independent of `status_line` and `status_line_rows`. Unavailable items are omitted, long headers are truncated with an ellipsis, and the header yields its row when the composer needs the space. Selection views, including `/agents`, hide the header.
+Fullscreen mode keeps the header at the top of chat view while the transcript scrolls. Selection views, including `/agents`, hide it. Inline mode places it above the live output. The header yields its row when the composer needs the space.
+
+The header uses the same item identifiers and theme colors as the footer, with `context-used` shortened to `ctx 42%`. Its selection is independent of `status_line` and `status_line_rows`. Unavailable items are omitted and long headers are truncated with an ellipsis.
 
 Remove `status_header` or set it to `[]` to hide it. Restart the TUI after editing the file. The setting stays local to this fork's TUI; it requires no daemon changes and uses the same session data as the official client.
 

@@ -5835,7 +5835,7 @@
           "type": "integer"
         },
         "status_header": {
-          "description": "Ordered status item identifiers for a single row above the composer. Unset or empty hides the header. Long headers are truncated without wrapping.",
+          "description": "Ordered status item identifiers for a single row above the conversation. Unset or empty hides the header. Long headers are truncated without wrapping.",
           "items": {
             "type": "string"
           },

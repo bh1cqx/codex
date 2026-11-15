@@ -78,6 +78,88 @@ pub(in crate::app) fn buffer_text(buffer: &Buffer) -> String {
 }
 
 #[tokio::test]
+async fn status_header_stays_pinned_in_chat_and_hides_in_agents_view() -> Result<()> {
+    let mut app = crate::app::test_support::make_test_app().await;
+    let thread_id = ThreadId::new();
+    app.chat_widget.local_settings.tui.status_header = Some(vec![
+        "thread-name".into(),
+        "model-name".into(),
+        "context-used".into(),
+    ]);
+    app.chat_widget.local_settings.tui.status_line_rows =
+        Some(vec![vec!["run-state".into(), "approval-mode".into()]]);
+    attach_thread(&mut app, thread_id);
+    app.chat_widget
+        .on_thread_name_updated(thread_id, Some("Pinned session".into()));
+    app.transcript_cells = vec![Arc::new(crate::history_cell::PlainHistoryCell::new(
+        (0..40)
+            .map(|row| format!("transcript row {row:02}").into())
+            .collect(),
+    ))];
+    app.chat_widget
+        .apply_external_edit("preserved draft".into());
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    tui.set_owned_screen(/*owned*/ true)?;
+    let size = Size::new(/*width*/ 80, /*height*/ 24);
+    for scroll in [0, -12, 12] {
+        app.transcript_view.scroll(&app.transcript_cells, scroll);
+        app.render_owned_transcript(&mut tui, size)?;
+        let rendered = buffer_text(crate::custom_terminal::test_support::last_rendered_buffer(
+            &tui.terminal,
+        ));
+        assert_eq!(
+            rendered.lines().next(),
+            Some("  Pinned session · gpt-test · ctx 0%"),
+            "{rendered}"
+        );
+        assert_eq!(rendered.matches("Pinned session").count(), 1);
+        assert!(rendered.contains("preserved draft"));
+        assert_eq!(
+            app.chat_widget
+                .status_line_content()
+                .and_then(crate::bottom_pane::StatusLine::explicit_row_count),
+            Some(1)
+        );
+    }
+    for height in [4, 8] {
+        app.render_owned_transcript(&mut tui, Size::new(/*width*/ 40, height))?;
+        let rendered = buffer_text(crate::custom_terminal::test_support::last_rendered_buffer(
+            &tui.terminal,
+        ));
+        assert!(rendered.contains("preserved draft"), "{rendered}");
+    }
+    app.chat_widget
+        .show_selection_view(crate::bottom_pane::SelectionViewParams {
+            view_id: Some(AGENTS_OVERVIEW_VIEW_ID),
+            title: Some("Agent command center".into()),
+            items: vec![crate::bottom_pane::SelectionItem {
+                name: "Another session".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+    app.render_owned_transcript(&mut tui, size)?;
+    let rendered = buffer_text(crate::custom_terminal::test_support::last_rendered_buffer(
+        &tui.terminal,
+    ));
+    assert!(!rendered.contains("Pinned session"), "{rendered}");
+    assert!(rendered.contains("Agent command center"));
+    assert!(rendered.contains("Another session"));
+    app.chat_widget.handle_key_event(KeyCode::Esc.into());
+    app.render_owned_transcript(&mut tui, size)?;
+    let rendered = buffer_text(crate::custom_terminal::test_support::last_rendered_buffer(
+        &tui.terminal,
+    ));
+    assert_eq!(
+        rendered.lines().next(),
+        Some("  Pinned session · gpt-test · ctx 0%"),
+        "{rendered}"
+    );
+    tui.set_owned_screen(/*owned*/ false)?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn external_writer_escape_returns_to_command_center_without_editing() -> Result<()> {
     for (detailed, scrolled, offline) in [
         (false, false, false),

@@ -773,6 +773,20 @@ impl App {
         let agents_overview_present = chat_widget
             .selected_index_for_present_view(AGENTS_OVERVIEW_VIEW_ID)
             .is_some();
+        let header = chat_widget.status_header_renderable(unfocused);
+        let available_header_height = area
+            .height
+            .saturating_sub(bottom.desired_height(area.width));
+        let header_height = header
+            .desired_height(area.width)
+            .min(available_header_height);
+        let header_area = Rect::new(area.x, area.y, area.width, header_height);
+        let area = Rect::new(
+            area.x,
+            area.y + header_height,
+            area.width,
+            area.height - header_height,
+        );
         let measure_bottom = |bottom: &dyn Renderable| {
             if agents_overview_present {
                 area.height
@@ -796,7 +810,8 @@ impl App {
             rows_above_composer.saturating_sub(u16::from(composer_gap.is_none())),
         );
         chat_widget.rendered_selection.borrow_mut().areas.clear();
-        ratatui::widgets::Clear.render(area, frame.buffer);
+        ratatui::widgets::Clear.render(prepared.area, frame.buffer);
+        header.render(header_area, frame.buffer);
         let mut completion_tip_area = view.render_with_turn_tip_space(
             transcript_area,
             frame.buffer,

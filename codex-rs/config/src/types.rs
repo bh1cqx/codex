@@ -1027,7 +1027,7 @@ pub struct Tui {
     /// Each row is truncated to the terminal width without wrapping.
     pub status_line_rows: Option<Vec<Vec<String>>>,
 
-    /// Ordered status item identifiers for a single row above the composer.
+    /// Ordered status item identifiers for a single row above the conversation.
     /// Unset or empty hides the header. Long headers are truncated without wrapping.
     pub status_header: Option<Vec<String>>,
 

@@ -893,7 +893,7 @@ pub struct Config {
     /// Explicit status rows; overrides `tui_status_line` when set.
     pub tui_status_line_rows: Option<Vec<Vec<String>>>,
 
-    /// Optional status item identifiers shown above the composer.
+    /// Optional status item identifiers shown above the conversation.
     pub tui_status_header: Option<Vec<String>>,
 
     /// Whether to color status line items with colors from the active syntax theme.

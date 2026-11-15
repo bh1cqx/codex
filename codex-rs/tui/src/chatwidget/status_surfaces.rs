@@ -245,7 +245,7 @@ impl ChatWidget {
             .unwrap_or_else(|| vec![selections.status_line_items.clone()]);
         let mut lines = Vec::new();
         for items in item_rows {
-            if let Some(line) = self.status_line_for_items(items) {
+            if let Some(line) = self.status_line_for_items(items, /*compact_context*/ false) {
                 lines.push(line);
             }
         }
@@ -260,12 +260,18 @@ impl ChatWidget {
     fn status_line_for_items(
         &mut self,
         items: impl IntoIterator<Item = StatusLineItem>,
+        compact_context: bool,
     ) -> Option<HyperlinkLine> {
         let segments = items
             .into_iter()
             .filter_map(|item| {
-                self.status_line_value_for_item(item)
-                    .map(|value| (item, value))
+                let value = if compact_context && item == StatusLineItem::ContextUsed {
+                    self.status_line_context_used_percent()
+                        .map(|used| format!("ctx {used}%"))
+                } else {
+                    self.status_line_value_for_item(item)
+                };
+                value.map(|value| (item, value))
             })
             .collect::<Vec<_>>();
         status_line_from_segments(
@@ -278,7 +284,10 @@ impl ChatWidget {
 
     fn refresh_status_header_from_selections(&mut self, selections: &StatusSurfaceSelections) {
         let header = self
-            .status_line_for_items(selections.status_header_items.iter().copied())
+            .status_line_for_items(
+                selections.status_header_items.iter().copied(),
+                /*compact_context*/ true,
+            )
             .map(Into::into);
         if self.status_header != header {
             self.status_header = header;
