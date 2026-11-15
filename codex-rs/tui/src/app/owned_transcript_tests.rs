@@ -109,7 +109,7 @@ async fn status_header_stays_pinned_in_chat_and_hides_in_agents_view() -> Result
         ));
         assert_eq!(
             rendered.lines().next(),
-            Some("  Pinned session · gpt-test · ctx 0%"),
+            Some("  Pinned session · gpt-test · ctx 0% ▱▱▱▱▱"),
             "{rendered}"
         );
         assert_eq!(rendered.matches("Pinned session").count(), 1);
@@ -152,7 +152,7 @@ async fn status_header_stays_pinned_in_chat_and_hides_in_agents_view() -> Result
     ));
     assert_eq!(
         rendered.lines().next(),
-        Some("  Pinned session · gpt-test · ctx 0%"),
+        Some("  Pinned session · gpt-test · ctx 0% ▱▱▱▱▱"),
         "{rendered}"
     );
     tui.set_owned_screen(/*owned*/ false)?;

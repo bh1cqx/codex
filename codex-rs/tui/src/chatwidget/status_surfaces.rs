@@ -22,6 +22,9 @@ use codex_protocol::config_types::ApprovalsReviewer;
 use codex_protocol::config_types::ServiceTier;
 use codex_protocol::models::PermissionProfile;
 use codex_utils_sandbox_summary::summarize_permission_profile;
+use ratatui::text::Span;
+
+const CONTEXT_METER_SEGMENTS: usize = 5;
 
 /// Items shown in the terminal title when the user has not configured a
 /// custom selection. Unnamed threads omit the name until one is available.
@@ -266,10 +269,24 @@ impl ChatWidget {
             .into_iter()
             .filter_map(|item| {
                 let value = if compact_context && item == StatusLineItem::ContextUsed {
-                    self.status_line_context_used_percent()
-                        .map(|used| format!("ctx {used}%"))
+                    self.status_line_context_used_percent().map(|used| {
+                        let filled = used as usize * CONTEXT_METER_SEGMENTS / 100;
+                        let style = match used {
+                            95.. => Style::default().red().bold(),
+                            80.. => Style::default().yellow(),
+                            _ => Style::default(),
+                        };
+                        Span::styled(
+                            format!(
+                                "ctx {used}% {}{}",
+                                "▰".repeat(filled),
+                                "▱".repeat(CONTEXT_METER_SEGMENTS - filled),
+                            ),
+                            style,
+                        )
+                    })
                 } else {
-                    self.status_line_value_for_item(item)
+                    self.status_line_value_for_item(item).map(Span::raw)
                 };
                 value.map(|value| (item, value))
             })

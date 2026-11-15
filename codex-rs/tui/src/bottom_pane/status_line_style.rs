@@ -109,14 +109,15 @@ impl StatusLineAccent {
     }
 }
 
-pub(crate) fn status_line_from_segments<I>(
+pub(crate) fn status_line_from_segments<I, S>(
     segments: I,
     use_theme_colors: bool,
     thread_id: Option<ThreadId>,
     pull_request_url: Option<&str>,
 ) -> Option<HyperlinkLine>
 where
-    I: IntoIterator<Item = (StatusLineItem, String)>,
+    I: IntoIterator<Item = (StatusLineItem, S)>,
+    S: Into<Span<'static>>,
 {
     status_line_from_segments_with_resolver(
         segments,
@@ -127,7 +128,7 @@ where
     )
 }
 
-fn status_line_from_segments_with_resolver<I, F>(
+fn status_line_from_segments_with_resolver<I, S, F>(
     segments: I,
     use_theme_colors: bool,
     thread_id: Option<ThreadId>,
@@ -135,11 +136,14 @@ fn status_line_from_segments_with_resolver<I, F>(
     theme_style_for_accent: F,
 ) -> Option<HyperlinkLine>
 where
-    I: IntoIterator<Item = (StatusLineItem, String)>,
+    I: IntoIterator<Item = (StatusLineItem, S)>,
+    S: Into<Span<'static>>,
     F: Fn(StatusLineAccent) -> Option<Style>,
 {
     let mut line = HyperlinkLine::default();
-    for (item, mut text) in segments {
+    for (item, segment) in segments {
+        let segment = segment.into();
+        let mut text = segment.content.into_owned();
         // Paragraph skips control characters, so they must not enter this single row's link offsets.
         text.retain(|ch| !ch.is_control());
         if !line.line.spans.is_empty() {
@@ -164,6 +168,7 @@ where
             secondary_text_style()
         };
         let style = if use_theme_colors {
+            let style = style.patch(segment.style);
             let foreground = style.fg.unwrap_or(Color::Reset);
             if effective_stdout_color_level() == StdoutColorLevel::Ansi16
                 && matches!(foreground, Color::Rgb(..) | Color::Indexed(16..))
