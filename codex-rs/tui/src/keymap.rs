@@ -158,6 +158,10 @@ pub(crate) struct AppKeymap {
 /// handler code, not here.
 #[derive(Clone, Debug)]
 pub(crate) struct ChatKeymap {
+    pub(crate) session_tab_previous: Vec<KeyBinding>,
+    pub(crate) session_tab_next: Vec<KeyBinding>,
+    pub(crate) session_tab_last: Vec<KeyBinding>,
+    pub(crate) toggle_session_pin: Vec<KeyBinding>,
     /// Open the preset submenu.
     pub(crate) open_presets: Vec<KeyBinding>,
     /// Start or stop a voice conversation.
@@ -940,6 +944,10 @@ impl RuntimeKeymap {
                 }));
 
         let mut chat = ChatKeymap {
+            session_tab_previous: resolve_local!(keymap, defaults, chat, session_tab_previous),
+            session_tab_next: resolve_local!(keymap, defaults, chat, session_tab_next),
+            session_tab_last: resolve_local!(keymap, defaults, chat, session_tab_last),
+            toggle_session_pin: resolve_local!(keymap, defaults, chat, toggle_session_pin),
             open_presets: resolve_local!(keymap, defaults, chat, open_presets),
             toggle_voice: if voice_toggle_default_is_shadowed {
                 Vec::new()
@@ -990,6 +998,33 @@ impl RuntimeKeymap {
             prompt_stack_back: resolve_local!(keymap, defaults, chat, prompt_stack_back),
             skip_question: resolve_local!(keymap, defaults, chat, skip_question),
         };
+        for (configured, bindings) in [
+            (
+                keymap.chat.session_tab_previous.as_ref(),
+                &mut chat.session_tab_previous,
+            ),
+            (
+                keymap.chat.session_tab_next.as_ref(),
+                &mut chat.session_tab_next,
+            ),
+            (
+                keymap.chat.session_tab_last.as_ref(),
+                &mut chat.session_tab_last,
+            ),
+            (
+                keymap.chat.toggle_session_pin.as_ref(),
+                &mut chat.toggle_session_pin,
+            ),
+        ] {
+            if configured.is_none() {
+                bindings.retain(|binding| {
+                    !configured_context_binding_is_used(keymap, *binding)
+                        && !chords.bindings.iter().any(|chord| {
+                            chord.chord.prefix.normalized_parts() == binding.normalized_parts()
+                        })
+                });
+            }
+        }
 
         let composer = ComposerKeymap {
             submit: resolve_with_global!(keymap, defaults, composer, submit),
@@ -1935,6 +1970,10 @@ impl RuntimeKeymap {
             },
             chords: Arc::default(),
             chat: ChatKeymap {
+                session_tab_previous: default_bindings![alt(KeyCode::PageUp)],
+                session_tab_next: default_bindings![alt(KeyCode::PageDown)],
+                session_tab_last: default_bindings![alt(KeyCode::Char('`'))],
+                toggle_session_pin: default_bindings![alt(KeyCode::Char('p'))],
                 open_presets: Vec::new(),
                 toggle_voice: default_bindings![plain(KeyCode::F(8))],
                 toggle_voice_mute: default_bindings![plain(KeyCode::F(9))],
@@ -2250,6 +2289,10 @@ impl RuntimeKeymap {
     ///    backtracking, intentionally stay outside this configurable keymap.
     fn validate_conflicts(&self) -> Result<(), String> {
         for (action, bindings) in [
+            ("chat.session_tab_previous", &self.chat.session_tab_previous),
+            ("chat.session_tab_next", &self.chat.session_tab_next),
+            ("chat.session_tab_last", &self.chat.session_tab_last),
+            ("chat.toggle_session_pin", &self.chat.toggle_session_pin),
             ("global.change_host", &self.app.change_host),
             (
                 "global.choose_cloud_environment",
@@ -2283,6 +2326,10 @@ impl RuntimeKeymap {
         let resize = &self.app.resize_panes;
         #[cfg(unix)]
         for (action, bindings) in [
+            ("chat.session_tab_previous", &self.chat.session_tab_previous),
+            ("chat.session_tab_next", &self.chat.session_tab_next),
+            ("chat.session_tab_last", &self.chat.session_tab_last),
+            ("chat.toggle_session_pin", &self.chat.toggle_session_pin),
             ("global.change_host", &self.app.change_host),
             (
                 "global.choose_cloud_environment",
@@ -2415,6 +2462,22 @@ impl RuntimeKeymap {
                 self.chat.prompt_stack_back.as_slice(),
             ),
             ("chat.skip_question", self.chat.skip_question.as_slice()),
+            (
+                "chat.session_tab_previous",
+                self.chat.session_tab_previous.as_slice(),
+            ),
+            (
+                "chat.session_tab_next",
+                self.chat.session_tab_next.as_slice(),
+            ),
+            (
+                "chat.session_tab_last",
+                self.chat.session_tab_last.as_slice(),
+            ),
+            (
+                "chat.toggle_session_pin",
+                self.chat.toggle_session_pin.as_slice(),
+            ),
             ("composer.submit", self.composer.submit.as_slice()),
             ("composer.queue", self.composer.queue.as_slice()),
             (
@@ -2599,6 +2662,22 @@ impl RuntimeKeymap {
                     self.chat.prompt_stack_back.as_slice(),
                 ),
                 ("chat.skip_question", self.chat.skip_question.as_slice()),
+                (
+                    "chat.session_tab_previous",
+                    self.chat.session_tab_previous.as_slice(),
+                ),
+                (
+                    "chat.session_tab_next",
+                    self.chat.session_tab_next.as_slice(),
+                ),
+                (
+                    "chat.session_tab_last",
+                    self.chat.session_tab_last.as_slice(),
+                ),
+                (
+                    "chat.toggle_session_pin",
+                    self.chat.toggle_session_pin.as_slice(),
+                ),
                 ("composer.submit", self.composer.submit.as_slice()),
                 ("composer.undo", self.composer.undo.as_slice()),
                 ("composer.redo", self.composer.redo.as_slice()),

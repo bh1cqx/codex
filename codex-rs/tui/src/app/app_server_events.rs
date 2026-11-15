@@ -115,6 +115,13 @@ impl App {
                 {
                     return;
                 }
+                if matches!(
+                    notification.as_ref(),
+                    ServerNotification::ThreadSectionChanged(_)
+                ) {
+                    self.refresh_agents_overview_threads(app_server_client);
+                    return;
+                }
                 let request_resolved = matches!(
                     notification.as_ref(),
                     ServerNotification::ServerRequestResolved(_)

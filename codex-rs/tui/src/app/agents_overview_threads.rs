@@ -62,6 +62,7 @@ fn detail_thread_ids<'a>(threads: impl Iterator<Item = &'a Thread>) -> Vec<Threa
 
 impl App {
     pub(super) fn remove_agents_overview_thread(&mut self, thread_id: ThreadId) {
+        self.agents_overview.tabs.forget(thread_id);
         self.prepare_agents_overview_removal(&std::collections::HashSet::from([thread_id]));
         self.agents_overview.search_matches.remove(&thread_id);
         self.agents_overview.removed_threads.insert(thread_id);
@@ -281,10 +282,12 @@ impl App {
         &mut self,
         app_server: &AppServerSession,
     ) {
-        if self
-            .chat_widget
-            .selected_index_for_present_view(AGENTS_OVERVIEW_VIEW_ID)
-            .is_none()
+        if !self.has_session_tabs()
+            && !self.agents_overview.pin_refresh_requested
+            && self
+                .chat_widget
+                .selected_index_for_present_view(AGENTS_OVERVIEW_VIEW_ID)
+                .is_none()
         {
             return;
         }
@@ -327,7 +330,11 @@ impl App {
             .chat_widget
             .selected_index_for_present_view(AGENTS_OVERVIEW_VIEW_ID)
             .is_some();
-        if !visible && initialized {
+        if !visible
+            && !self.has_session_tabs()
+            && initialized
+            && !self.agents_overview.pin_refresh_requested
+        {
             return;
         }
         if overview.active_refresh.is_some() {

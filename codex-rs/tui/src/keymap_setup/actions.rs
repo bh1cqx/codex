@@ -150,6 +150,10 @@ define_keymap_actions! {
         leader => "Set the prefix used by shared leader shortcuts.",
     }
     chat "Chat" {
+        session_tab_previous => "Switch to the previous pinned session tab.",
+        session_tab_next => "Switch to the next pinned session tab.",
+        session_tab_last => "Return to the last viewed session.",
+        toggle_session_pin => "Pin or unpin the current session.",
         interrupt_turn => "Interrupt the active turn.",
         decrease_reasoning_effort => "Decrease reasoning effort.",
         increase_reasoning_effort => "Increase reasoning effort.",

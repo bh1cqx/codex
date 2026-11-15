@@ -646,6 +646,7 @@ impl App {
         conversation_inset: Option<Rect>,
         frames: &tui::FrameRequester,
     ) -> PreparedConversation {
+        self.prepare_session_tabs();
         self.conversation_frame.inset = conversation_inset;
         self.conversation_frame.sidebar = None;
         self.conversation_frame.chat_strip = None;
@@ -789,11 +790,16 @@ impl App {
             .desired_height(area.width)
             .min(available_header_height);
         let header_area = Rect::new(area.x, area.y, area.width, header_height);
+        let tabs = &mut self.agents_overview.tabs;
+        let tabs_height = tabs
+            .height(area.width)
+            .min(available_header_height.saturating_sub(header_height));
+        let tabs_area = Rect::new(area.x, area.y + header_height, area.width, tabs_height);
         let area = Rect::new(
             area.x,
-            area.y + header_height,
+            area.y + header_height + tabs_height,
             area.width,
-            area.height - header_height,
+            area.height - header_height - tabs_height,
         );
         let measure_bottom = |bottom: &dyn Renderable| {
             if agents_overview_present {
@@ -820,6 +826,7 @@ impl App {
         chat_widget.rendered_selection.borrow_mut().areas.clear();
         ratatui::widgets::Clear.render(prepared.area, frame.buffer);
         header.render(header_area, frame.buffer);
+        tabs.render(tabs_area, frame.buffer);
         let mut completion_tip_area = view.render_with_turn_tip_space(
             transcript_area,
             frame.buffer,

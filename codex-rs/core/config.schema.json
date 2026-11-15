@@ -5588,7 +5588,11 @@
               "open_presets": null,
               "previous_permission_mode": null,
               "prompt_stack_back": null,
+              "session_tab_last": null,
+              "session_tab_next": null,
+              "session_tab_previous": null,
               "skip_question": null,
+              "toggle_session_pin": null,
               "toggle_voice": null,
               "toggle_voice_mute": null
             },
@@ -6224,6 +6228,30 @@
           ],
           "description": "Move back through pending async questions toward the composer."
         },
+        "session_tab_last": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/KeybindingsSpec"
+            }
+          ],
+          "description": "Return to the last viewed session."
+        },
+        "session_tab_next": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/KeybindingsSpec"
+            }
+          ],
+          "description": "Switch to the next pinned session tab."
+        },
+        "session_tab_previous": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/KeybindingsSpec"
+            }
+          ],
+          "description": "Switch to the previous pinned session tab."
+        },
         "skip_question": {
           "allOf": [
             {
@@ -6231,6 +6259,14 @@
             }
           ],
           "description": "Skip the focused question."
+        },
+        "toggle_session_pin": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/KeybindingsSpec"
+            }
+          ],
+          "description": "Pin or unpin the current session."
         },
         "toggle_voice": {
           "allOf": [
@@ -6832,7 +6868,11 @@
             "open_presets": null,
             "previous_permission_mode": null,
             "prompt_stack_back": null,
+            "session_tab_last": null,
+            "session_tab_next": null,
+            "session_tab_previous": null,
             "skip_question": null,
+            "toggle_session_pin": null,
             "toggle_voice": null,
             "toggle_voice_mute": null
           }
