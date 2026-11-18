@@ -1,3 +1,4 @@
+use crate::path_utils::paths_match_after_normalization;
 use crate::path_utils::resolve_symlink_write_paths;
 use crate::path_utils::write_atomically;
 use anyhow::Context;
@@ -767,19 +768,71 @@ fn apply_blocking_to_resolved_file(
     resolved_config_file: &Path,
     edits: &[ConfigEdit],
 ) -> anyhow::Result<()> {
-    if edits.is_empty() {
-        return Ok(());
+    if let Some(edit) = prepare_file_edits(resolved_config_file, edits)? {
+        edit.write()?;
+    }
+    Ok(())
+}
+
+struct PreparedConfigEdit {
+    path: PathBuf,
+    original: Option<String>,
+    updated: String,
+}
+
+impl PreparedConfigEdit {
+    fn write(&self) -> anyhow::Result<()> {
+        write_atomically(&self.path, &self.updated)
+            .with_context(|| format!("failed to persist config at {}", self.path.display()))
     }
 
-    let write_paths = resolve_symlink_write_paths(resolved_config_file)?;
-    let serialized = match write_paths.read_path {
-        Some(path) => match std::fs::read_to_string(&path) {
-            Ok(contents) => contents,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
-            Err(err) => return Err(err.into()),
-        },
-        None => String::new(),
-    };
+    fn write_if_unchanged(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            read_existing_config(&self.path)? == self.original,
+            "{} changed during the save. Retry the edit.",
+            self.path.display()
+        );
+        self.write()
+    }
+
+    fn restore(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            std::fs::read_to_string(&self.path)? == self.updated,
+            "{} changed again after the save",
+            self.path.display()
+        );
+        match self.original.as_deref() {
+            Some(contents) => write_atomically(&self.path, contents)?,
+            None => std::fs::remove_file(&self.path)?,
+        }
+        Ok(())
+    }
+}
+
+fn read_existing_config(path: &Path) -> std::io::Result<Option<String>> {
+    match std::fs::read_to_string(path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(err),
+    }
+}
+
+fn prepare_file_edits(
+    path: &Path,
+    edits: &[ConfigEdit],
+) -> anyhow::Result<Option<PreparedConfigEdit>> {
+    if edits.is_empty() {
+        return Ok(None);
+    }
+
+    let write_paths = resolve_symlink_write_paths(path)?;
+    let original = write_paths
+        .read_path
+        .as_deref()
+        .map(read_existing_config)
+        .transpose()?
+        .flatten();
+    let serialized = original.as_deref().unwrap_or_default();
 
     let doc = if serialized.is_empty() {
         DocumentMut::new()
@@ -795,17 +848,14 @@ fn apply_blocking_to_resolved_file(
     }
 
     if !mutated {
-        return Ok(());
+        return Ok(None);
     }
-
-    write_atomically(&write_paths.write_path, &document.doc.to_string()).with_context(|| {
-        format!(
-            "failed to persist config at {}",
-            write_paths.write_path.display()
-        )
-    })?;
-
-    Ok(())
+    let updated = document.doc.to_string();
+    Ok((updated != serialized).then_some(PreparedConfigEdit {
+        path: write_paths.write_path,
+        original,
+        updated,
+    }))
 }
 
 /// Fluent builder to batch config edits and apply them atomically.
@@ -1007,6 +1057,39 @@ impl ConfigEditsBuilder {
     /// Apply edits on a blocking thread.
     pub fn apply_blocking(self) -> anyhow::Result<()> {
         apply_blocking_to_resolved_file(&self.config_path, &self.edits)
+    }
+
+    /// Save related edits to distinct files, restoring the first if the second write fails.
+    pub async fn apply_with(self, other: Self) -> anyhow::Result<()> {
+        task::spawn_blocking(move || {
+            let first_path = resolve_symlink_write_paths(&self.config_path)?.write_path;
+            let second_path = resolve_symlink_write_paths(&other.config_path)?.write_path;
+            anyhow::ensure!(
+                !paths_match_after_normalization(&first_path, &second_path),
+                "The shared and multiline configurations must be separate files."
+            );
+            let first = prepare_file_edits(&self.config_path, &self.edits)?;
+            let second = prepare_file_edits(&other.config_path, &other.edits)?;
+            if let Some(first) = &first {
+                first.write_if_unchanged()?;
+            }
+            if let Some(second) = second
+                && let Err(error) = second.write_if_unchanged()
+            {
+                if let Some(first) = first
+                    && let Err(restore_error) = first.restore()
+                {
+                    anyhow::bail!(
+                        "{error:#}. Could not restore {}: {restore_error:#}",
+                        first.path.display()
+                    );
+                }
+                return Err(error);
+            }
+            Ok(())
+        })
+        .await
+        .context("config persistence task panicked")?
     }
 
     /// Apply edits asynchronously via a blocking offload.

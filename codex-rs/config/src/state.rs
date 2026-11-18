@@ -122,6 +122,7 @@ pub struct ConfigLayerEntry {
     pub config: TomlValue,
     pub version: String,
     pub disabled_reason: Option<String>,
+    multiline_overlay: bool,
     raw_toml: Option<RawTomlLayer>,
     hooks_config_folder_override: Option<AbsolutePathBuf>,
 }
@@ -133,6 +134,19 @@ struct RawTomlLayer {
 }
 
 impl ConfigLayerEntry {
+    pub(crate) fn multiline(file: AbsolutePathBuf, config: TomlValue) -> Self {
+        Self {
+            multiline_overlay: true,
+            ..Self::new(
+                ConfigLayerSource::User {
+                    file,
+                    profile: None,
+                },
+                config,
+            )
+        }
+    }
+
     pub fn new(name: ConfigLayerSource, config: TomlValue) -> Self {
         let version = version_for_toml(&config);
         Self {
@@ -140,6 +154,7 @@ impl ConfigLayerEntry {
             config,
             version,
             disabled_reason: None,
+            multiline_overlay: false,
             raw_toml: None,
             hooks_config_folder_override: None,
         }
@@ -157,6 +172,7 @@ impl ConfigLayerEntry {
             config,
             version,
             disabled_reason: None,
+            multiline_overlay: false,
             raw_toml: Some(RawTomlLayer {
                 contents: raw_toml,
                 base_dir: raw_toml_base_dir,
@@ -176,6 +192,7 @@ impl ConfigLayerEntry {
             config,
             version,
             disabled_reason: Some(disabled_reason.into()),
+            multiline_overlay: false,
             raw_toml: None,
             hooks_config_folder_override: None,
         }
@@ -456,10 +473,9 @@ impl ConfigLayerStack {
     /// the base `$CODEX_HOME/config.toml` layer because the active layer is the
     /// writable target for profile-aware edits.
     pub fn get_active_user_layer(&self) -> Option<&ConfigLayerEntry> {
-        self.layers
-            .iter()
-            .rev()
-            .find(|layer| matches!(layer.name, ConfigLayerSource::User { .. }))
+        self.layers.iter().rev().find(|layer| {
+            !layer.multiline_overlay && matches!(layer.name, ConfigLayerSource::User { .. })
+        })
     }
 
     pub fn get_user_config_file(&self) -> Option<&AbsolutePathBuf> {
@@ -540,12 +556,13 @@ impl ConfigLayerStack {
         }) {
             layers.remove(index);
         }
-        match layers
-            .iter()
-            .position(|layer| layer.name.precedence() > user_layer.name.precedence())
-        {
-            Some(index) => layers.insert(index, user_layer),
-            None => layers.push(user_layer),
+        if let Some(index) = layers.iter().position(|layer| {
+            (layer.name.precedence(), layer.multiline_overlay)
+                > (user_layer.name.precedence(), false)
+        }) {
+            layers.insert(index, user_layer);
+        } else {
+            layers.push(user_layer);
         }
         Ok(Self {
             layers,

@@ -421,6 +421,14 @@ fn project_toml(value: &TomlValue, selector: &SelectorNode) -> Option<TomlValue>
     Some(projected)
 }
 
+pub(super) fn multiline_settings(document: TomlValue) -> TomlValue {
+    let paths = crate::multiline::FORK_SETTINGS
+        .iter()
+        .map(|path| path.split('.').map(str::to_owned).collect())
+        .collect::<Vec<_>>();
+    project_toml_value(&document, &SelectorNode::from_paths(&paths))
+}
+
 fn project_toml_value(value: &TomlValue, selector: &SelectorNode) -> TomlValue {
     if selector.terminal {
         return value.clone();

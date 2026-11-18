@@ -13,6 +13,44 @@ use std::os::unix::fs::symlink;
 use tempfile::tempdir;
 use toml::Value as TomlValue;
 
+#[tokio::test]
+async fn paired_config_edits_restore_the_original_file_when_the_second_write_fails() {
+    let tmp = tempdir().unwrap();
+    let multiline = tmp.path().join("multiline.config.toml");
+    let shared = tmp.path().join("config.toml");
+    std::fs::write(&shared, "# shared\n").unwrap();
+    for original in [None, Some("# layout\n")] {
+        if let Some(contents) = original {
+            std::fs::write(&multiline, contents).unwrap();
+        }
+        let layout = ConfigEditsBuilder::for_config_path(&multiline)
+            .with_edits([status_line_rows_edit(&[])]);
+        let unwritable = ConfigEditsBuilder::for_config_path(&shared.join("child"))
+            .with_edits([status_line_use_colors_edit(true)]);
+        assert!(layout.apply_with(unwritable).await.is_err());
+        assert_eq!(
+            read_existing_config(&multiline).unwrap().as_deref(),
+            original
+        );
+        assert_eq!(std::fs::read_to_string(&shared).unwrap(), "# shared\n");
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn paired_config_edits_reject_a_symlink_to_the_shared_config() {
+    let tmp = tempdir().unwrap();
+    let shared = tmp.path().join("config.toml");
+    let multiline = tmp.path().join("multiline.config.toml");
+    symlink(&shared, &multiline).unwrap();
+    let layout =
+        ConfigEditsBuilder::for_config_path(&multiline).with_edits([status_line_rows_edit(&[])]);
+    let fallback = ConfigEditsBuilder::for_config_path(&shared);
+    assert!(layout.apply_with(fallback).await.is_err());
+    assert!(!shared.exists());
+    assert!(multiline.is_symlink());
+}
+
 #[test]
 fn blocking_set_model_top_level() {
     let tmp = tempdir().expect("tmpdir");

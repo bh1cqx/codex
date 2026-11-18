@@ -370,6 +370,58 @@ async fn keymap_daemon_validates_before_saving_or_applying_bindings() -> Result<
 }
 
 #[tokio::test]
+async fn fork_shortcuts_use_the_multiline_file_with_the_official_daemon() -> Result<()> {
+    let (mut app, _events, _ops) = make_test_app_with_channels().await;
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    let mut server = start_config_write_test_app_server(&app).await?;
+    app.app_server_target = AppServerTarget::LocalDaemon {
+        endpoint: crate::resolve_remote_addr("unix:///unused.sock")?,
+        allow_embedded_fallback: false,
+    };
+    let shared = app.local_settings.user_config_path.clone();
+    let multiline = app.local_settings.codex_home.join("multiline.config.toml");
+    std::fs::write(&shared, "# shared\n")?;
+    let context = "global".to_owned();
+    let action = "previous_answer".to_owned();
+    app.handle_event(
+        &mut tui,
+        &mut server,
+        AppEvent::KeymapCaptured {
+            context: context.clone(),
+            action: action.clone(),
+            key: "f12".into(),
+            intent: crate::app_event::KeymapEditIntent::ReplaceAll,
+        },
+    )
+    .await?;
+    let saved: toml::Value = toml::from_str(&std::fs::read_to_string(&multiline)?)?;
+    assert_eq!(
+        saved["tui"]["keymap"]["global"]["previous_answer"].as_str(),
+        Some("f12")
+    );
+    app.handle_event(
+        &mut tui,
+        &mut server,
+        AppEvent::KeymapCleared { context, action },
+    )
+    .await?;
+    let saved: codex_config::config_toml::ConfigToml =
+        toml::from_str(&std::fs::read_to_string(&multiline)?)?;
+    assert!(
+        saved
+            .tui
+            .unwrap_or_default()
+            .keymap
+            .global
+            .previous_answer
+            .is_none()
+    );
+    assert_eq!(std::fs::read_to_string(&shared)?, "# shared\n");
+    server.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn local_command_and_inline_error_reveal_their_history_output() -> Result<()> {
     let (mut app, mut events, _op_rx) = make_test_app_with_channels().await;
     let mut tui = crate::tui::test_support::make_test_tui()?;

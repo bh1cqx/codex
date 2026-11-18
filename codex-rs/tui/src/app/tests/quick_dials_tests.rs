@@ -13,6 +13,12 @@ async fn quick_dials_persist_save_replace_and_delete() -> Result<()> {
         config_path.as_path(),
         "# Keep this setting.\n[tui]\nshow_tooltips = false\n",
     )?;
+    let multiline = app.local_settings.codex_home.join("multiline.config.toml");
+    let layout = "[tui]\nstatus_header = ['git-branch']\n[tui.presets.3]\ninput = 'obsolete'\n";
+    std::fs::write(&multiline, layout)?;
+    app.refresh_in_memory_config_from_disk()
+        .await
+        .expect("load both config files");
 
     let first = QuickDial {
         input: "Review the current changes".into(),
@@ -54,6 +60,7 @@ async fn quick_dials_persist_save_replace_and_delete() -> Result<()> {
     assert!(reloaded.tui_quick_dials.is_empty());
     assert!(app.local_settings.tui.quick_dials.is_empty());
     assert!(app.chat_widget.local_settings.tui.quick_dials.is_empty());
+    assert_eq!(std::fs::read_to_string(&multiline)?, layout);
     assert!(!reloaded.show_tooltips);
     Ok(())
 }

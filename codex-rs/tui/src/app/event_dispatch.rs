@@ -4287,7 +4287,11 @@ impl App {
             }
         };
 
-        let save = if matches!(self.app_server_target, AppServerTarget::LocalDaemon { .. }) {
+        let key_path = format!("tui.keymap.{context}.{action}");
+        let fork_binding = codex_config::multiline::is_multiline_setting(&key_path);
+        let save = if !fork_binding
+            && matches!(self.app_server_target, AppServerTarget::LocalDaemon { .. })
+        {
             // Let the daemon validate shared config before writing: older daemons may
             // not understand bindings introduced by this TUI, including new defaults.
             app_server
@@ -4296,7 +4300,7 @@ impl App {
                     codex_app_server_protocol::ClientRequest::ConfigValueWrite {
                         request_id: app_server.next_request_id(),
                         params: codex_app_server_protocol::ConfigValueWriteParams {
-                            key_path: format!("tui.keymap.{context}.{action}"),
+                            key_path,
                             value: match bindings.as_slice() {
                                 [binding] => serde_json::json!(binding),
                                 bindings => serde_json::json!(bindings),
@@ -4316,10 +4320,7 @@ impl App {
             let edit = crate::legacy_core::config::edit::keymap_bindings_edit(
                 &context, &action, &bindings,
             );
-            ConfigEditsBuilder::for_config_path(self.local_settings.user_config_path.as_path())
-                .with_edits([edit])
-                .apply()
-                .await
+            self.save_keymap_edit(&context, &action, edit).await
         };
         match save {
             Ok(()) => {
@@ -4341,6 +4342,29 @@ impl App {
                     .report_config_save_error(format!("Failed to save shortcut: {err}"));
             }
         }
+    }
+
+    async fn save_keymap_edit(
+        &self,
+        context: &str,
+        action: &str,
+        edit: crate::legacy_core::config::edit::ConfigEdit,
+    ) -> anyhow::Result<()> {
+        let shared =
+            ConfigEditsBuilder::for_config_path(self.local_settings.user_config_path.as_path());
+        if codex_config::multiline::is_multiline_setting(&format!("tui.keymap.{context}.{action}"))
+            && let Some(path) = self
+                .loader_overrides
+                .multiline_config_path(&self.local_settings.codex_home)
+        {
+            let clear_legacy =
+                crate::legacy_core::config::edit::keymap_binding_clear_edit(context, action);
+            return ConfigEditsBuilder::for_config_path(path.as_path())
+                .with_edits([edit])
+                .apply_with(shared.with_edits([clear_legacy]))
+                .await;
+        }
+        shared.with_edits([edit]).apply().await
     }
 
     fn refresh_plugin_mentions_after_config_write(&mut self) {
@@ -4378,11 +4402,7 @@ impl App {
         };
 
         let edit = crate::legacy_core::config::edit::keymap_binding_clear_edit(&context, &action);
-        match ConfigEditsBuilder::for_config_path(self.local_settings.user_config_path.as_path())
-            .with_edits([edit])
-            .apply()
-            .await
-        {
+        match self.save_keymap_edit(&context, &action, edit).await {
             Ok(()) => {
                 self.cancel_pending_key_chord();
                 self.local_settings.tui.keymap = keymap_config.clone();

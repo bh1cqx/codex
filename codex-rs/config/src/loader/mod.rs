@@ -84,8 +84,6 @@ const SYSTEM_CONFIG_TOML_FILE_UNIX: &str = "/etc/codex/config.toml";
 #[cfg(windows)]
 const DEFAULT_PROGRAM_DATA_DIR_WINDOWS: &str = r"C:\ProgramData";
 
-const MULTILINE_CONFIG_TOML_FILE: &str = "multiline.config.toml";
-
 // Project-local config comes from repository contents, so it should not get to
 // choose where a user's credentials are sent or which local commands are run.
 // These settings are still supported from user, system, managed, and runtime
@@ -132,7 +130,7 @@ async fn first_layer_config_error_from_entries(layers: &[ConfigLayerEntry]) -> O
 ///   `%ProgramData%\OpenAI\Codex\config.toml` (Windows)
 /// - cloud     enterprise-managed cloud config bundle fragments
 /// - user      `${CODEX_HOME}/config.toml`
-/// - override  `${CODEX_HOME}/multiline.config.toml`, when present and no user config is selected
+/// - fork-only TUI settings in `${CODEX_HOME}/multiline.config.toml`, when no user config is selected
 /// - profile   `${CODEX_HOME}/<name>.config.toml`, when selected
 /// - cwd       `${PWD}/config.toml` (loaded but disabled when the directory is untrusted)
 /// - tree      parent directories up to root looking for `./.codex/config.toml` (loaded but disabled when untrusted)
@@ -157,35 +155,17 @@ pub async fn load_config_layers_state(
     thread_config_loader: &dyn ThreadConfigLoader,
 ) -> io::Result<ConfigLayerStack> {
     let ConfigLoadOptions {
-        loader_overrides: mut overrides,
+        loader_overrides: overrides,
         strict_config,
         cloud_config_bundle,
     } = options.into();
-    if overrides.user_config_path.is_none()
-        && overrides.user_config_profile.is_none()
-        && !overrides.ignore_user_config
-    {
-        let multiline_file =
-            AbsolutePathBuf::resolve_path_against_base(MULTILINE_CONFIG_TOML_FILE, codex_home);
-        match fs
-            .get_metadata(
-                &PathUri::from_abs_path(&multiline_file),
-                Default::default(),
-                /*sandbox*/ None,
-            )
-            .await
-        {
-            Ok(_) => overrides.user_config_path = Some(multiline_file),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error),
-        }
-    }
     let packaged_defaults_layer = if let Some(file) = &overrides.packaged_defaults_path {
         let config = layer_io::read_config_from_path(
             fs,
             file,
             /*log_missing_as_info*/ false,
             strict_config,
+            std::convert::identity,
         )
         .await?
         .ok_or_else(|| {
@@ -349,6 +329,19 @@ pub async fn load_config_layers_state(
         }
     }
     layers.push(base_user_layer);
+
+    if let Some(file) = overrides.multiline_config_path(codex_home)
+        && let Some(config) = layer_io::read_config_from_path(
+            fs,
+            &file,
+            /*log_missing_as_info*/ false,
+            strict_config,
+            local::multiline_settings,
+        )
+        .await?
+    {
+        layers.push(ConfigLayerEntry::multiline(file, config));
+    }
 
     if active_user_file != base_user_file {
         layers.push(

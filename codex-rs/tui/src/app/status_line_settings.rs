@@ -1,4 +1,4 @@
-//! Save status line settings to the active local user configuration.
+//! Save the shared footer preferences and ccx row layout.
 
 use super::App;
 use crate::legacy_core::config::edit::ConfigEdit;
@@ -38,20 +38,34 @@ impl App {
         } else {
             None
         };
-        let items_edit = match &rows {
-            Some(rows) => status_line_rows_edit(rows),
-            None => status_line_items_edit(&ids),
+        let clear_rows = || ConfigEdit::ClearPath {
+            segments: vec!["tui".to_string(), "status_line_rows".to_string()],
         };
-        let mut edits = vec![items_edit, status_line_use_colors_edit(use_theme_colors)];
+        let row_edit = rows
+            .as_ref()
+            .map_or_else(clear_rows, |rows| status_line_rows_edit(rows));
+        let mut shared_edits = vec![status_line_use_colors_edit(use_theme_colors)];
         if rows.is_none() {
-            edits.push(ConfigEdit::ClearPath {
-                segments: vec!["tui".to_string(), "status_line_rows".to_string()],
-            });
+            shared_edits.push(status_line_items_edit(&ids));
         }
-        ConfigEditsBuilder::for_config_path(self.local_settings.user_config_path.as_path())
-            .with_edits(edits)
-            .apply()
-            .await?;
+        let shared =
+            ConfigEditsBuilder::for_config_path(self.local_settings.user_config_path.as_path());
+        if let Some(path) = self
+            .loader_overrides
+            .multiline_config_path(&self.local_settings.codex_home)
+        {
+            shared_edits.push(clear_rows());
+            ConfigEditsBuilder::for_config_path(path.as_path())
+                .with_edits([row_edit])
+                .apply_with(shared.with_edits(shared_edits))
+                .await?;
+        } else {
+            shared
+                .with_edits(shared_edits)
+                .with_edits([row_edit])
+                .apply()
+                .await?;
+        }
 
         self.local_settings.tui.status_line_rows = rows.clone();
         self.local_settings.tui.status_line_use_colors = use_theme_colors;
