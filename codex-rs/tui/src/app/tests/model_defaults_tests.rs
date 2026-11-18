@@ -9,6 +9,88 @@ use crossterm::event::KeyCode;
 use pretty_assertions::assert_eq;
 
 #[tokio::test]
+async fn model_picker_only_saves_new_thread_defaults_on_d() -> Result<()> {
+    let (mut app, mut events, _ops) = make_test_app_with_channels().await;
+    let shared = app.local_settings.user_config_path.clone();
+    let multiline = app.local_settings.codex_home.join("multiline.config.toml");
+    let original =
+        "model = 'gpt-5.5'\nmodel_reasoning_effort = 'low'\n[tui.presets.0]\ninput = 'my preset'\n";
+    let layout = "[tui]\nstatus_header = ['model']\n";
+    std::fs::write(&shared, original)?;
+    std::fs::write(&multiline, layout)?;
+    app.refresh_in_memory_config_from_disk().await?;
+    let mut server = Box::pin(crate::start_embedded_app_server_for_picker(&app.config)).await?;
+    let thread = server.start_thread(&app.config).await?;
+    let id = thread.session.thread_id;
+    app.enqueue_primary_thread_session(thread.session, thread.turns)
+        .await?;
+    let mut tui = crate::tui::test_support::make_test_tui()?;
+    let mut preset = app
+        .model_catalog
+        .models
+        .iter()
+        .find(|p| p.model == "gpt-5.6-terra")
+        .unwrap()
+        .clone();
+    preset.supported_reasoning_efforts.clear();
+    for key in [KeyCode::Enter, KeyCode::Char('d')] {
+        preset.default_reasoning_effort = if key == KeyCode::Enter {
+            ReasoningEffortConfig::High
+        } else {
+            ReasoningEffortConfig::Ultra
+        };
+        while events.try_recv().is_ok() {}
+        if key == KeyCode::Enter {
+            app.chat_widget
+                .open_model_popup_with_presets(vec![preset.clone()]);
+        } else {
+            app.chat_widget
+                .open_advanced_reasoning_popup(preset.clone());
+        }
+        app.chat_widget.handle_key_event(key.into());
+        while let Ok(event) = events.try_recv() {
+            Box::pin(app.handle_event(&mut tui, &mut server, event)).await?;
+        }
+        let updated = next_thread_settings_updated(&mut server, id).await;
+        assert_eq!(updated.thread_settings.model, preset.model);
+        assert_eq!(
+            updated.thread_settings.effort,
+            Some(preset.default_reasoning_effort.clone())
+        );
+        app.enqueue_thread_notification(id, ServerNotification::ThreadSettingsUpdated(updated))
+            .await?;
+        assert_eq!(std::fs::read_to_string(&multiline)?, layout);
+        let (next, _) = app.load_new_session_config(&server).await?;
+        let fresh = server.start_thread(&next).await?;
+        let saved = std::fs::read_to_string(&shared)?;
+        if key == KeyCode::Enter {
+            assert_eq!(saved, original);
+            assert_eq!(fresh.session.model, "gpt-5.5");
+            assert_eq!(
+                fresh.session.reasoning_effort,
+                Some(ReasoningEffortConfig::Low)
+            );
+        } else {
+            let saved: toml::Value = toml::from_str(&saved)?;
+            assert_eq!(saved["model"].as_str(), Some(preset.model.as_str()));
+            assert_eq!(saved["model_reasoning_effort"].as_str(), Some("ultra"));
+            assert_eq!(
+                saved["tui"]["presets"]["0"]["input"].as_str(),
+                Some("my preset")
+            );
+            assert!(saved["tui"].get("status_header").is_none());
+            assert_eq!(fresh.session.model, preset.model);
+            assert_eq!(
+                fresh.session.reasoning_effort,
+                Some(ReasoningEffortConfig::Ultra)
+            );
+        }
+    }
+    server.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn session_model_selection_preserves_defaults_and_updates_active_thread() -> Result<()> {
     for mode in [ModeKind::Default, ModeKind::Plan] {
         let (mut app, mut events, _ops) = make_test_app_with_channels().await;
@@ -131,11 +213,12 @@ async fn standard_speed_selection_falls_back_for_older_app_servers() -> Result<(
     while events.try_recv().is_ok() {}
     while ops.try_recv().is_ok() {}
 
-    app.select_session_model(
+    app.apply_model_selection(
         &mut server,
         "gpt-5.6-terra".into(),
         Some(ReasoningEffortConfig::High),
         Some(SERVICE_TIER_DEFAULT_REQUEST_VALUE.into()),
+        /*save_default*/ false,
     )
     .await;
 
@@ -472,7 +555,8 @@ async fn cloud_model_selection_waits_for_native_admission() -> Result<()> {
         while events.try_recv().is_ok() {}
         let original_status_line = app.chat_widget.status_line_text();
 
-        let event = AppEvent::ApplyModelSelection {
+        let event = AppEvent::SelectSessionModel {
+            service_tier: None,
             model: "gpt-5.6-terra".into(),
             effort: Some(ReasoningEffortConfig::High),
         };
@@ -676,13 +760,12 @@ async fn model_default_saves_report_server_outcomes_and_target_server_profile() 
                 model: "gpt-5.5".into(),
                 effort: Some(ReasoningEffortConfig::High),
             },
-            AppEvent::PersistPlanModeReasoningEffort(Some(ReasoningEffortConfig::High)),
             AppEvent::PersistServiceTierSelection {
                 service_tier: Some(ServiceTier::Fast.request_value().into()),
             },
-            AppEvent::ApplyAdvancedReasoning {
+            AppEvent::ApplyModelSelection {
                 model: "gpt-5.5".into(),
-                effort: ReasoningEffortConfig::Ultra,
+                effort: Some(ReasoningEffortConfig::Ultra),
             },
         ] {
             Box::pin(app.handle_event(&mut tui, &mut server, event)).await?;
@@ -707,11 +790,11 @@ async fn model_default_saves_report_server_outcomes_and_target_server_profile() 
             .join("\n");
         assert_eq!(
             messages.matches("higher-priority").count(),
-            if outcome == "overridden" { 4 } else { 0 }
+            if outcome == "overridden" { 3 } else { 0 }
         );
         assert_eq!(
             messages.matches("Failed to save").count(),
-            if outcome == "rejected" { 4 } else { 0 }
+            if outcome == "rejected" { 3 } else { 0 }
         );
         if outcome == "overridden" {
             insta::assert_snapshot!("overridden_model_defaults", messages);
@@ -730,8 +813,7 @@ async fn model_default_saves_report_server_outcomes_and_target_server_profile() 
                 toml::from_str::<toml::Value>(&persisted)?,
                 toml::Value::Table(toml::toml! {
                     model = "gpt-5.5"
-                    model_reasoning_effort = "medium"
-                    plan_mode_reasoning_effort = "high"
+                    model_reasoning_effort = "ultra"
                     service_tier = "fast"
                 })
             );

@@ -200,11 +200,13 @@ async fn commands_can_precede_the_sparkle_but_inserted_or_typed_drafts_cannot() 
         app.local_settings.tui.animations = true;
         app.local_settings.tui.effects.starfield = true;
         app.local_settings.tui.disable_paste_burst = Some(true);
+        app.config.model = Some("gpt-5.5".into());
         let mut server = start_config_write_test_app_server(&app).await?;
+        let thread = server.start_thread(&app.config).await?;
         let mut tui = crate::tui::test_support::make_test_tui()?;
         app.replace_chat_widget_with_app_server_thread(
             &mut tui,
-            started("gpt-5.5"),
+            thread,
             ThreadAttachPresentation::Fresh,
             /*initial_user_message*/ None,
         )
@@ -381,9 +383,10 @@ async fn only_confirmed_picker_model_changes_can_arm_the_sparkle() -> Result<()>
         app.local_settings.tui.animations = true;
         app.local_settings.tui.effects.starfield = true;
         app.local_settings.tui.disable_paste_burst = Some(true);
+        app.config.model = Some("gpt-5.5".into());
         let mut server = start_config_write_test_app_server(&app).await?;
+        let thread = server.start_thread(&app.config).await?;
         let mut tui = crate::tui::test_support::make_test_tui()?;
-        let thread = started("gpt-5.5");
         let original_id = thread.session.thread_id;
         app.replace_chat_widget_with_app_server_thread(
             &mut tui,
@@ -458,7 +461,10 @@ async fn only_confirmed_picker_model_changes_can_arm_the_sparkle() -> Result<()>
                     AppEvent::AstraSelectedFromModelPicker {
                         thread_id: original_id,
                         model: "gpt-6-astra".into(),
-                        action: AstraModelPickerAction::UpdateModel,
+                        action: AstraModelPickerAction::SelectSessionModel {
+                            effort: None,
+                            service_tier: None,
+                        },
                     },
                 )
                 .await?;
@@ -478,13 +484,13 @@ async fn only_confirmed_picker_model_changes_can_arm_the_sparkle() -> Result<()>
 async fn astra_picker_confirms_the_model_at_application_after_an_automatic_update() -> Result<()> {
     let mut snapshots = Vec::new();
     for (picker, key, switches_away) in [
-        ("default no-op", KeyCode::Enter, false),
-        ("session no-op", KeyCode::Char('s'), false),
+        ("default no-op", KeyCode::Char('d'), false),
+        ("session no-op", KeyCode::Enter, false),
         ("advanced no-op", KeyCode::Enter, false),
-        ("default queued no-op", KeyCode::Enter, false),
-        ("session queued no-op", KeyCode::Char('s'), false),
-        ("default changes model", KeyCode::Enter, true),
-        ("session changes model", KeyCode::Char('s'), true),
+        ("default queued no-op", KeyCode::Char('d'), false),
+        ("session queued no-op", KeyCode::Enter, false),
+        ("default changes model", KeyCode::Char('d'), true),
+        ("session changes model", KeyCode::Enter, true),
         ("advanced changes model", KeyCode::Enter, true),
     ] {
         let (mut app, mut events, _ops) = make_test_app_with_channels().await;
@@ -548,7 +554,6 @@ async fn astra_picker_confirms_the_model_at_application_after_an_automatic_updat
                     | AppEvent::ApplyModelSelection { .. }
                     | AppEvent::UpdateReasoningEffort(_)
                     | AppEvent::SelectSessionModel { .. }
-                    | AppEvent::ApplyAdvancedReasoning { .. }
                     | AppEvent::AstraSelectedFromModelPicker { .. }
             ) {
                 app.handle_event(&mut tui, &mut server, event).await?;
@@ -686,7 +691,7 @@ async fn session_only_astra_picker_shows_stars_only_on_an_untouched_task() -> Re
                 &mut server,
                 &mut events,
                 "gpt-6-astra",
-                KeyCode::Char('s'),
+                KeyCode::Enter,
             )
             .await?,
             1
@@ -723,7 +728,7 @@ async fn session_only_astra_picker_shows_stars_only_on_an_untouched_task() -> Re
                 &mut server,
                 &mut events,
                 "gpt-6-astra",
-                KeyCode::Char('s'),
+                KeyCode::Enter,
             )
             .await?,
             0

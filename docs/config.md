@@ -31,6 +31,12 @@ Each inner array is one row, with items in the listed order. Rows keep the exist
 
 The "Current status line" preset supports single-line layouts only.
 
+## Model selection
+
+In `/model`, choose a model and, when offered, a reasoning effort. On the final choice, **Enter** applies the selection to this session. Press **d** to apply it and save the same model and effort as the default for new sessions. Both actions work in Plan mode. The separate `plan_mode_reasoning_effort` setting still controls the default effort when entering Plan mode.
+
+Cloud conversations and Luna Reserve support session changes only. Inline `/model` commands and model presets also apply to the current session.
+
 ## Status header
 
 Add `status_header` under `[tui]` in `~/.codex/multiline.config.toml` to pin a compact row above the conversation. This example keeps the model and context in the header and uses one footer row:

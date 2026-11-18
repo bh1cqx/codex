@@ -4,7 +4,6 @@
 //! into another, especially while Plan mode is active.
 
 use super::*;
-use crate::model_catalog::LUNA_RESERVE_MODEL;
 
 const ULTRA_REASONING_CONCURRENCY_WARNING_THRESHOLD: usize = 8;
 pub(super) const MODEL_OPTIONS_VIEW_ID: &str = "model-options";
@@ -148,42 +147,26 @@ impl ChatWidget {
                             .supported_reasoning_efforts
                             .iter()
                             .any(|option| Self::is_advanced_reasoning_effort(&option.effort));
-                let actions: Vec<SelectionAction> = if requires_advanced_selection {
-                    let preset_for_action = preset.clone();
+                let choice = if requires_advanced_selection {
                     let scoped = self.scope_model_picker_event();
-                    vec![Box::new(move |tx| {
-                        tx.send(scoped(AppEvent::OpenReasoningPopup {
-                            model: preset_for_action.clone(),
-                        }));
-                    })]
+                    let preset = preset.clone();
+                    SelectionItem {
+                        actions: vec![Box::new(move |tx| {
+                            tx.send(scoped(AppEvent::OpenReasoningPopup {
+                                model: preset.clone(),
+                            }));
+                        })],
+                        dismiss_parent_on_child_accept: true,
+                        ..Default::default()
+                    }
                 } else {
-                    let should_prompt_plan_mode_scope = self
-                        .should_prompt_plan_mode_reasoning_scope(
-                            model.as_str(),
-                            Some(preset.default_reasoning_effort.clone()),
-                        );
-                    self.model_selection_actions(
-                        model.clone(),
-                        Some(preset.default_reasoning_effort.clone()),
-                        should_prompt_plan_mode_scope,
-                    )
+                    self.model_choice(&model, preset.default_reasoning_effort.clone())
                 };
                 SelectionItem {
-                    name: preset.display_name.clone(),
+                    name: preset.display_name,
                     description,
-                    is_current: model.as_str() == current_model,
-                    secondary_action: if requires_advanced_selection {
-                        None
-                    } else {
-                        self.session_model_selection_action(
-                            model.clone(),
-                            Some(preset.default_reasoning_effort),
-                        )
-                    },
-                    actions,
-                    dismiss_on_select: !requires_advanced_selection,
-                    dismiss_parent_on_child_accept: requires_advanced_selection,
-                    ..Default::default()
+                    is_current: model == current_model,
+                    ..choice
                 }
             })
             .collect();
@@ -282,26 +265,26 @@ impl ChatWidget {
                 _ => None,
             }
             .filter(|effort| !Self::is_advanced_reasoning_effort(effort));
-            let single_supported_effort = direct_effort.is_some();
-            let preset_for_action = preset.clone();
-            let scoped = self.scope_model_picker_event();
-            let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                let preset_for_event = preset_for_action.clone();
-                tx.send(scoped(AppEvent::OpenReasoningPopup {
-                    model: preset_for_event,
-                }));
-            })];
+            let name = preset.display_name.clone();
+            let choice = if let Some(effort) = direct_effort {
+                self.model_choice(&preset.model, effort)
+            } else {
+                let scoped = self.scope_model_picker_event();
+                SelectionItem {
+                    actions: vec![Box::new(move |tx| {
+                        tx.send(scoped(AppEvent::OpenReasoningPopup {
+                            model: preset.clone(),
+                        }));
+                    })],
+                    dismiss_parent_on_child_accept: true,
+                    ..Default::default()
+                }
+            };
             items.push(SelectionItem {
-                name: preset.display_name.clone(),
+                name,
                 description,
                 is_current,
-                secondary_action: direct_effort.and_then(|effort| {
-                    self.session_model_selection_action(preset.model.clone(), Some(effort))
-                }),
-                actions,
-                dismiss_on_select: single_supported_effort,
-                dismiss_parent_on_child_accept: !single_supported_effort,
-                ..Default::default()
+                ..choice
             });
         }
 
@@ -315,198 +298,6 @@ impl ChatWidget {
                 ..SelectionViewParams::picker()
             },
         );
-    }
-
-    fn model_selection_actions(
-        &self,
-        model_for_action: String,
-        effort_for_action: Option<ReasoningEffortConfig>,
-        should_prompt_plan_mode_scope: bool,
-    ) -> Vec<SelectionAction> {
-        let warning = effort_for_action
-            .as_ref()
-            .and_then(|effort| self.ultra_reasoning_concurrency_warning(effort));
-        let thread_id = self.thread_id();
-        let sparkle_thread = self.sparkle_thread_for_picker_action(&model_for_action);
-        let scoped = self.scope_model_picker_event();
-        vec![Box::new(move |tx| {
-            if model_for_action == LUNA_RESERVE_MODEL {
-                // Reserve is temporary: update the active task without persisting a model default.
-                if let Some(thread_id) = thread_id {
-                    tx.send(scoped(AppEvent::UpdateLunaReserveReasoning {
-                        thread_id,
-                        effort: effort_for_action.clone(),
-                    }));
-                }
-            } else if effort_for_action == Some(ReasoningEffortConfig::Ultra) {
-                tx.send(scoped(
-                    AstraModelPickerAction::ApplyAdvancedReasoning {
-                        effort: ReasoningEffortConfig::Ultra,
-                    }
-                    .into_picker_event(sparkle_thread, model_for_action.clone()),
-                ));
-            } else if should_prompt_plan_mode_scope {
-                tx.send(scoped(AppEvent::OpenPlanReasoningScopePrompt {
-                    model: model_for_action.clone(),
-                    effort: effort_for_action.clone(),
-                }));
-            } else {
-                tx.send(scoped(
-                    AstraModelPickerAction::ApplyModelSelection {
-                        effort: effort_for_action.clone(),
-                    }
-                    .into_picker_event(sparkle_thread, model_for_action.clone()),
-                ));
-            }
-            if let Some(warning) = warning.clone() {
-                tx.send(scoped(AppEvent::InsertHistoryCell(Box::new(
-                    history_cell::new_warning_event(warning),
-                ))));
-            }
-        })]
-    }
-
-    fn should_prompt_plan_mode_reasoning_scope(
-        &self,
-        selected_model: &str,
-        selected_effort: Option<ReasoningEffortConfig>,
-    ) -> bool {
-        if !self.collaboration_modes_enabled()
-            || selected_model == LUNA_RESERVE_MODEL
-            || self.active_mode_kind() != ModeKind::Plan
-            || selected_model != self.current_model()
-        {
-            return false;
-        }
-
-        // Prompt whenever the selection is not a true no-op for both:
-        // 1) the active Plan-mode effective reasoning, and
-        // 2) the stored global defaults that would be updated by the fallback path.
-        selected_effort != self.effective_reasoning_effort()
-            || selected_model != self.current_collaboration_mode.model()
-            || selected_effort != self.current_collaboration_mode.reasoning_effort()
-    }
-
-    pub(crate) fn open_plan_reasoning_scope_prompt(
-        &mut self,
-        model: String,
-        effort: Option<ReasoningEffortConfig>,
-    ) {
-        let reasoning_phrase = match effort.as_ref() {
-            Some(ReasoningEffortConfig::None) => "no reasoning".to_string(),
-            Some(selected_effort) => {
-                format!(
-                    "{} reasoning",
-                    Self::reasoning_effort_sentence_label(selected_effort)
-                )
-            }
-            None => "the selected reasoning".to_string(),
-        };
-        let plan_only_description = format!("Always use {reasoning_phrase} in Plan mode");
-        let plan_reasoning_source = if let Some(plan_override) =
-            self.config.plan_mode_reasoning_effort.as_ref()
-        {
-            format!(
-                "user-chosen Plan override ({})",
-                Self::reasoning_effort_sentence_label(plan_override)
-            )
-        } else if let Some(plan_mask) = collaboration_modes::plan_mask(self.model_catalog.as_ref())
-        {
-            match plan_mask
-                .reasoning_effort
-                .as_ref()
-                .and_then(|effort| effort.as_ref())
-            {
-                Some(plan_effort) => format!(
-                    "built-in Plan default ({})",
-                    Self::reasoning_effort_sentence_label(plan_effort)
-                ),
-                None => "built-in Plan default (no reasoning)".to_string(),
-            }
-        } else {
-            "built-in Plan default".to_string()
-        };
-        let all_modes_description = format!(
-            "Set the global default reasoning level and Plan mode override, replacing the current {plan_reasoning_source}"
-        );
-        let subtitle = format!("Choose where to apply {reasoning_phrase}.");
-        let warning = effort
-            .as_ref()
-            .and_then(|effort| self.ultra_reasoning_concurrency_warning(effort));
-        let sparkle_thread = self.sparkle_thread_for_picker_action(&model);
-
-        let scoped = self.scope_model_picker_event();
-        let plan_only_actions: Vec<SelectionAction> = vec![Box::new({
-            let model = model.clone();
-            let effort = effort.clone();
-            let warning = warning.clone();
-            move |tx| {
-                tx.send(scoped(
-                    AstraModelPickerAction::UpdateModel
-                        .into_picker_event(sparkle_thread, model.clone()),
-                ));
-                tx.send(scoped(AppEvent::UpdatePlanModeReasoningEffort(
-                    effort.clone(),
-                )));
-                tx.send(scoped(AppEvent::PersistPlanModeReasoningEffort(
-                    effort.clone(),
-                )));
-                if let Some(warning) = warning.clone() {
-                    tx.send(scoped(AppEvent::InsertHistoryCell(Box::new(
-                        history_cell::new_warning_event(warning),
-                    ))));
-                }
-            }
-        })];
-        let scoped = self.scope_model_picker_event();
-        let all_modes_actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-            tx.send(scoped(
-                AstraModelPickerAction::UpdateModel
-                    .into_picker_event(sparkle_thread, model.clone()),
-            ));
-            tx.send(scoped(AppEvent::UpdateReasoningEffort(effort.clone())));
-            tx.send(scoped(AppEvent::UpdatePlanModeReasoningEffort(
-                effort.clone(),
-            )));
-            tx.send(scoped(AppEvent::PersistPlanModeReasoningEffort(
-                effort.clone(),
-            )));
-            tx.send(scoped(AppEvent::PersistModelSelection {
-                model: model.clone(),
-                effort: effort.clone(),
-            }));
-            if let Some(warning) = warning.clone() {
-                tx.send(scoped(AppEvent::InsertHistoryCell(Box::new(
-                    history_cell::new_warning_event(warning),
-                ))));
-            }
-        })];
-
-        self.bottom_pane.show_selection_view(SelectionViewParams {
-            view_id: Some(MODEL_OPTIONS_VIEW_ID),
-            title: Some(PLAN_MODE_REASONING_SCOPE_TITLE.to_string()),
-            subtitle: Some(subtitle),
-            items: vec![
-                SelectionItem {
-                    name: PLAN_MODE_REASONING_SCOPE_PLAN_ONLY.to_string(),
-                    description: Some(plan_only_description),
-                    actions: plan_only_actions,
-                    dismiss_on_select: true,
-                    ..Default::default()
-                },
-                SelectionItem {
-                    name: PLAN_MODE_REASONING_SCOPE_ALL_MODES.to_string(),
-                    description: Some(all_modes_description),
-                    actions: all_modes_actions,
-                    dismiss_on_select: true,
-                    ..Default::default()
-                },
-            ],
-            ..SelectionViewParams::picker()
-        });
-        self.notify(Notification::PlanModePrompt {
-            title: PLAN_MODE_REASONING_SCOPE_TITLE.to_string(),
-        });
     }
 
     /// Open a popup to choose the standard reasoning effort for the given model.
@@ -551,20 +342,11 @@ impl ChatWidget {
             .into_iter()
             .partition(|effort| !Self::is_advanced_reasoning_effort(effort));
 
-        if choices.len() == 1 && advanced_choices.is_empty() {
-            let selected_effort = choices.first().cloned();
-            let selected_model = preset.model;
-            if self
-                .should_prompt_plan_mode_reasoning_scope(&selected_model, selected_effort.clone())
-            {
-                let scoped = self.scope_model_picker_event();
-                self.app_event_tx
-                    .send(scoped(AppEvent::OpenPlanReasoningScopePrompt {
-                        model: selected_model,
-                        effort: selected_effort,
-                    }));
-            } else {
-                self.apply_model_and_effort(selected_model, selected_effort);
+        if let [effort] = choices.as_slice()
+            && advanced_choices.is_empty()
+        {
+            for action in self.model_choice(&preset.model, effort.clone()).actions {
+                action(&self.app_event_tx);
             }
             return;
         }
@@ -618,27 +400,12 @@ impl ChatWidget {
                 None
             };
 
-            let choice_effort = Some(effort);
-            let should_prompt_plan_mode_scope = self.should_prompt_plan_mode_reasoning_scope(
-                model_slug.as_str(),
-                choice_effort.clone(),
-            );
-            let actions = self.model_selection_actions(
-                model_slug.clone(),
-                choice_effort.clone(),
-                should_prompt_plan_mode_scope,
-            );
-
             items.push(SelectionItem {
                 name: effort_label,
                 description,
                 selected_description,
                 is_current: is_current_model && Some(choice) == highlight_choice.as_ref(),
-                secondary_action: self
-                    .session_model_selection_action(model_slug.clone(), choice_effort),
-                actions,
-                dismiss_on_select: true,
-                ..Default::default()
+                ..self.model_choice(&model_slug, effort)
             });
         }
 
@@ -721,23 +488,11 @@ impl ChatWidget {
                 }
                 _ => unreachable!("advanced choices are limited to Max and Ultra"),
             };
-            let should_prompt_plan_mode_scope = self
-                .should_prompt_plan_mode_reasoning_scope(model_slug.as_str(), Some(effort.clone()));
-            let actions = self.model_selection_actions(
-                model_slug.clone(),
-                Some(effort.clone()),
-                should_prompt_plan_mode_scope,
-            );
-
             items.push(SelectionItem {
                 name: Self::reasoning_effort_label(&effort),
                 description: Some(description.to_string()),
                 is_current: is_current_model && Some(&effort) == highlight_choice.as_ref(),
-                secondary_action: self
-                    .session_model_selection_action(model_slug.clone(), Some(effort.clone())),
-                actions,
-                dismiss_on_select: true,
-                ..Default::default()
+                ..self.model_choice(&model_slug, effort)
             });
         }
 
@@ -806,13 +561,5 @@ impl ChatWidget {
              increase usage quickly. Consider setting \
              features.multi_agent_v2.max_concurrent_threads_per_session below 8."
         ))
-    }
-
-    fn apply_model_and_effort(&self, model: String, effort: Option<ReasoningEffortConfig>) {
-        for action in self
-            .model_selection_actions(model, effort, /*should_prompt_plan_mode_scope*/ false)
-        {
-            action(&self.app_event_tx);
-        }
     }
 }

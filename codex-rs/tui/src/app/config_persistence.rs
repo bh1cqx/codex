@@ -1127,55 +1127,6 @@ impl App {
         }
     }
 
-    pub(super) fn on_apply_advanced_reasoning(
-        &mut self,
-        model: &str,
-        effort: ReasoningEffortConfig,
-    ) -> Option<ReasoningEffortConfig> {
-        let default_effort = self.default_reasoning_effort_for_conversation_model(model);
-        if let Some(default_effort) = default_effort.as_ref() {
-            self.config.model = Some(model.to_string());
-            self.config.model_reasoning_effort = Some(default_effort.clone());
-        }
-        self.chat_widget.set_model(model);
-        self.chat_widget.set_reasoning_effort(Some(effort.clone()));
-        self.chat_widget
-            .set_plan_mode_reasoning_effort(Some(effort));
-        default_effort
-    }
-
-    fn default_reasoning_effort_for_conversation_model(
-        &self,
-        model: &str,
-    ) -> Option<ReasoningEffortConfig> {
-        let configured_effort = self
-            .config
-            .model_reasoning_effort
-            .as_ref()
-            .filter(|effort| **effort != ReasoningEffortConfig::Ultra);
-        let preset = self
-            .model_catalog
-            .try_list_models()
-            .ok()?
-            .into_iter()
-            .find(|preset| preset.model == model)?;
-        let supported = &preset.supported_reasoning_efforts;
-
-        configured_effort
-            .filter(|effort| supported.iter().any(|option| option.effort == **effort))
-            .cloned()
-            .or_else(|| {
-                (preset.default_reasoning_effort != ReasoningEffortConfig::Ultra)
-                    .then_some(preset.default_reasoning_effort)
-            })
-            .or_else(|| {
-                supported
-                    .iter()
-                    .find(|option| option.effort != ReasoningEffortConfig::Ultra)
-                    .map(|option| option.effort.clone())
-            })
-    }
-
     pub(super) fn resume_model_settings(&self) -> crate::app_server_session::ResumeModelSettings {
         resume_model_settings_for_overrides(&self.config, &self.harness_overrides)
     }
@@ -1471,7 +1422,6 @@ fn features_toml_from_json(value: &serde_json::Value) -> Option<FeaturesToml> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
 
     use super::*;
     use crate::app::test_support::app_enabled_in_effective_config;
@@ -1481,7 +1431,6 @@ mod tests {
     use codex_config::ConfigLayerEntry;
     use codex_config::ConfigLayerStack;
     use codex_protocol::models::PermissionProfile;
-    use codex_protocol::openai_models::ReasoningEffortPreset;
     use crossterm::event::KeyCode;
     use crossterm::event::KeyEvent;
     use pretty_assertions::assert_eq;
@@ -1506,81 +1455,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn conversation_reasoning_uses_compatible_default_for_new_threads() {
-        for (configured_effort, expected_default_effort) in [
-            (ReasoningEffortConfig::Low, ReasoningEffortConfig::Low),
-            (
-                ReasoningEffortConfig::Custom("unsupported".to_string()),
-                ReasoningEffortConfig::Medium,
-            ),
-            (ReasoningEffortConfig::Ultra, ReasoningEffortConfig::Medium),
-        ] {
-            let mut app = make_test_app().await;
-            app.config.model = Some("gpt-5.5".to_string());
-            app.config.model_reasoning_effort = Some(configured_effort.clone());
-            app.chat_widget
-                .set_reasoning_effort(Some(configured_effort));
-
-            let default_effort =
-                app.on_apply_advanced_reasoning("gpt-5.5", ReasoningEffortConfig::Ultra);
-            let new_thread_config = &app.config;
-
-            assert_eq!(default_effort, Some(expected_default_effort.clone()));
-            assert_eq!(app.chat_widget.current_model(), "gpt-5.5");
-            assert_eq!(
-                app.chat_widget.current_reasoning_effort(),
-                Some(ReasoningEffortConfig::Ultra)
-            );
-            assert_eq!(
-                (
-                    new_thread_config.model.as_deref(),
-                    new_thread_config.model_reasoning_effort.clone(),
-                ),
-                (Some("gpt-5.5"), Some(expected_default_effort))
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn conversation_reasoning_keeps_previous_default_for_ultra_only_model() {
-        let mut app = make_test_app().await;
-        app.config.model = Some("gpt-5.5".to_string());
-        app.config.model_reasoning_effort = Some(ReasoningEffortConfig::Low);
-        let mut preset = app
-            .model_catalog
-            .try_list_models()
-            .expect("model catalog is infallible")
-            .into_iter()
-            .find(|preset| preset.model == "gpt-5.5")
-            .expect("gpt-5.5 preset");
-        preset.model = "ultra-only".to_string();
-        preset.default_reasoning_effort = ReasoningEffortConfig::Ultra;
-        preset.supported_reasoning_efforts = vec![ReasoningEffortPreset {
-            effort: ReasoningEffortConfig::Ultra,
-            description: "Ultra reasoning".to_string(),
-        }];
-        app.model_catalog = Arc::new(ModelCatalog::new(vec![preset]));
-
-        let default_effort =
-            app.on_apply_advanced_reasoning("ultra-only", ReasoningEffortConfig::Ultra);
-        let new_thread_config = &app.config;
-
-        assert_eq!(default_effort, None);
-        assert_eq!(app.chat_widget.current_model(), "ultra-only");
-        assert_eq!(
-            app.chat_widget.current_reasoning_effort(),
-            Some(ReasoningEffortConfig::Ultra)
-        );
-        assert_eq!(
-            (
-                new_thread_config.model.as_deref(),
-                new_thread_config.model_reasoning_effort.clone(),
-            ),
-            (Some("gpt-5.5"), Some(ReasoningEffortConfig::Low))
-        );
-    }
-
-    #[tokio::test]
     async fn conversation_reasoning_updates_active_plan_without_changing_plan_default() {
         let mut app = make_test_app().await;
         app.config.model_reasoning_effort = Some(ReasoningEffortConfig::Low);
@@ -1592,10 +1466,19 @@ mod tests {
         app.chat_widget
             .handle_key_event(KeyEvent::from(KeyCode::BackTab));
 
-        let default_effort =
-            app.on_apply_advanced_reasoning("gpt-5.5", ReasoningEffortConfig::Ultra);
+        let mut server = Box::pin(crate::start_embedded_app_server_for_picker(&app.config))
+            .await
+            .unwrap();
+        app.apply_model_selection(
+            &mut server,
+            "gpt-5.5".into(),
+            Some(ReasoningEffortConfig::Ultra),
+            None,
+            false,
+        )
+        .await;
+        server.shutdown().await.unwrap();
 
-        assert_eq!(default_effort, Some(ReasoningEffortConfig::Low));
         assert_eq!(
             app.chat_widget.current_reasoning_effort(),
             Some(ReasoningEffortConfig::Ultra)
@@ -1634,7 +1517,18 @@ mod tests {
         app.chat_widget
             .set_plan_mode_reasoning_effort(Some(ReasoningEffortConfig::High));
 
-        app.on_apply_advanced_reasoning("gpt-5.4", ReasoningEffortConfig::Ultra);
+        let mut server = Box::pin(crate::start_embedded_app_server_for_picker(&app.config))
+            .await
+            .unwrap();
+        app.apply_model_selection(
+            &mut server,
+            "gpt-5.4".into(),
+            Some(ReasoningEffortConfig::Ultra),
+            None,
+            false,
+        )
+        .await;
+        server.shutdown().await.unwrap();
         app.on_update_reasoning_effort(Some(ReasoningEffortConfig::Medium));
         app.chat_widget
             .handle_key_event(KeyEvent::from(KeyCode::BackTab));
@@ -1661,7 +1555,18 @@ mod tests {
         app.chat_widget
             .handle_key_event(KeyEvent::from(KeyCode::BackTab));
 
-        app.on_apply_advanced_reasoning("gpt-5.4", ReasoningEffortConfig::Ultra);
+        let mut server = Box::pin(crate::start_embedded_app_server_for_picker(&app.config))
+            .await
+            .unwrap();
+        app.apply_model_selection(
+            &mut server,
+            "gpt-5.4".into(),
+            Some(ReasoningEffortConfig::Ultra),
+            None,
+            false,
+        )
+        .await;
+        server.shutdown().await.unwrap();
         app.on_update_plan_mode_reasoning_effort(Some(ReasoningEffortConfig::Medium));
         app.chat_widget
             .handle_key_event(KeyEvent::from(KeyCode::BackTab));

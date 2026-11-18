@@ -75,7 +75,11 @@ async fn bedrock_astra_model_and_reasoning_pickers() {
                 AppEvent::AstraSelectedFromModelPicker {
                     thread_id,
                     model,
-                    action: AstraModelPickerAction::ApplyAdvancedReasoning { effort },
+                    action:
+                        AstraModelPickerAction::SelectSessionModel {
+                            effort: Some(effort),
+                            service_tier: None,
+                        },
                 } => Some((thread_id, model, effort)),
                 _ => None,
             });

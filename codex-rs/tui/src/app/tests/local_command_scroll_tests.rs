@@ -141,11 +141,10 @@ async fn settings_picker_save_failures_reveal_their_errors() -> Result<()> {
             model: "gpt-5.5".into(),
             effort: Some(ReasoningEffortConfig::High),
         },
-        AppEvent::ApplyAdvancedReasoning {
+        AppEvent::ApplyModelSelection {
             model: "gpt-5.5".into(),
-            effort: ReasoningEffortConfig::Ultra,
+            effort: Some(ReasoningEffortConfig::Ultra),
         },
-        AppEvent::PersistPlanModeReasoningEffort(Some(ReasoningEffortConfig::High)),
         AppEvent::UpdateMemorySettings {
             use_memories: true,
             generate_memories: true,

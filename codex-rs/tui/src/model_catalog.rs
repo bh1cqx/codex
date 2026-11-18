@@ -26,6 +26,7 @@ pub(crate) fn model_display_name(model: &str) -> &str {
 #[derive(Debug, Clone)]
 pub(crate) struct ModelCatalog {
     pub(crate) backend: Option<BackendId>,
+    pub(crate) can_save_defaults: bool,
     pub(crate) provider_write: ProviderWrite,
     pub(crate) models: Vec<ModelPreset>,
     pub(crate) collaboration_modes: Vec<CollaborationModeMask>,
@@ -35,6 +36,7 @@ impl ModelCatalog {
     pub(crate) fn new(models: Vec<ModelPreset>) -> Self {
         Self {
             backend: None,
+            can_save_defaults: true,
             provider_write: ProviderWrite::default(),
             models,
             collaboration_modes: Vec::new(),
@@ -44,9 +46,12 @@ impl ModelCatalog {
     pub(crate) fn for_backend(
         mut self,
         backend: BackendId,
+        mode: crate::ThreadParamsMode,
         writes: &mut HashMap<BackendId, ProviderWrite>,
     ) -> Self {
         self.backend = Some(backend);
+        self.can_save_defaults =
+            mode.settings_owner() == crate::app_server_session::ThreadSettingsOwner::Client;
         self.provider_write = writes.entry(backend).or_default().clone();
         self
     }

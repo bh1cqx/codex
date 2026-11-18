@@ -12761,9 +12761,10 @@ async fn selecting_cyber_model_defaults_active_thread_to_auto_review() {
         app.handle_event(
             &mut tui,
             &mut app_server,
-            AppEvent::ApplyAdvancedReasoning {
+            AppEvent::SelectSessionModel {
                 model: "gpt-5.5".to_string(),
-                effort: ReasoningEffortConfig::High,
+                effort: Some(ReasoningEffortConfig::High),
+                service_tier: None,
             },
         )
         .await
@@ -12917,9 +12918,10 @@ async fn changing_cyber_model_reasoning_preserves_selected_permissions() {
                 app.handle_event(
                     &mut tui,
                     &mut app_server,
-                    AppEvent::ApplyAdvancedReasoning {
+                    AppEvent::SelectSessionModel {
                         model: model_name.clone(),
-                        effort: effort.clone(),
+                        effort: Some(effort.clone()),
+                        service_tier: None,
                     },
                 )
                 .await
