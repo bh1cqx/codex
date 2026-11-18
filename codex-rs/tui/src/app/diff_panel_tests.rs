@@ -328,7 +328,7 @@ async fn diff_panel_hidden_and_covered_views_do_not_poll() -> Result<()> {
             ..Default::default()
         });
     crate::app::test_support::side_frame(&mut app, &mut tui, Size::new(140, 24))?;
-    assert!(app.conversation_frame.panel_area().is_none());
+    assert!(app.conversation_frame.chooser_area().is_none());
     assert!(
         app.sidebar()
             .unwrap()
@@ -381,7 +381,7 @@ async fn diff_panel_preserves_chat_draft_and_side_chat_while_scrolling_and_closi
     assert!(before.contains("Conversation stays visible"), "{before}");
     assert!(before.contains("unfinished reply"), "{before}");
     assert!(before.contains("+line 0"), "{before}");
-    let area = app.conversation_frame.panel_area().expect("diff pane");
+    let area = app.conversation_frame.chooser_area().expect("diff pane");
     assert!(area.width < size.width);
     assert!(app.handle_diff_panel_event(
         &mut tui,
@@ -484,7 +484,7 @@ async fn diff_panel_yields_to_the_agent_command_center() -> Result<()> {
     app.start_diff_view(&mut tui, request, Some(thread), cwd.clone());
     crate::app::test_support::side_frame(&mut app, &mut tui, Size::new(80, 24))?;
     assert_eq!(
-        app.conversation_frame.panel_area(),
+        app.conversation_frame.chooser_area(),
         Some(Rect::new(0, 0, 80, 24))
     );
     app.chat_widget
@@ -505,7 +505,7 @@ async fn diff_panel_yields_to_the_agent_command_center() -> Result<()> {
         Ok("+hidden change".into()),
     );
     let frame = crate::app::test_support::side_frame(&mut app, &mut tui, Size::new(80, 24))?;
-    assert!(app.conversation_frame.panel_area().is_none());
+    assert!(app.conversation_frame.chooser_area().is_none());
     assert!(frame.contains("Agent command center"), "{frame}");
     assert!(!frame.contains("+hidden change"), "{frame}");
     tui.set_owned_screen(false)?;
@@ -627,6 +627,29 @@ async fn ctrl_c_closes_the_diff_without_exiting_when_disconnected() -> Result<()
         app.chat_widget.config_ref().cwd.to_path_buf(),
     );
     app.reconnect.offline = true;
+    app.chat_widget
+        .apply_external_edit("keep this draft".into());
+    app.keymap.app.focus_pane_left = vec![crate::key_hint::plain(KeyCode::F(6))];
+    app.keymap.app.focus_pane_right = vec![crate::key_hint::plain(KeyCode::F(7))];
+    for (key, focus) in [
+        (KeyCode::F(6), PaneFocus::Main),
+        (KeyCode::F(7), PaneFocus::Sidebar),
+    ] {
+        assert!(
+            app.handle_side_focus_key(&mut tui, &mut server, key.into())
+                .await
+        );
+        assert_eq!(app.panel_focus(), Some(focus));
+        assert!(matches!(
+            app.sidebar().and_then(|pane| pane.visible_content()),
+            Some(SidebarContent::Diff)
+        ));
+        assert_eq!(app.current_displayed_thread_id(), Some(thread));
+        assert_eq!(
+            app.chat_widget.composer_text_with_pending(),
+            "keep this draft"
+        );
+    }
     let control = Box::pin(app.handle_tui_event(
         &mut tui,
         &mut server,

@@ -264,7 +264,7 @@ use tokio::time;
 
 macro_rules! assert_app_snapshot {
     ($name:expr, $value:expr $(,)?) => {
-        insta::with_settings!({snapshot_path => "../snapshots"}, {
+        insta::with_settings!({snapshot_path => concat!(env!("CARGO_MANIFEST_DIR"), "/src/snapshots")}, {
             assert_snapshot!($name, $value);
         });
     };
@@ -4155,7 +4155,7 @@ async fn handle_start_side_seeds_navigation_before_thread_started() -> Result<()
         config.codex_home.join("config.toml"),
         // Each thread reloads this footer. Omit the platform-specific working directory.
         format!(
-            "openai_base_url = '{}/v1'\ndefault_permissions = ':workspace'\n[permissions.side-reader]\nextends = ':read-only'\n[tui]\nstatus_line = ['model-with-reasoning']",
+            "openai_base_url = '{}/v1'\ndefault_permissions = ':workspace'\n[permissions.side-reader]\nextends = ':read-only'\n[tui]\nresume_cwd = 'session'\nstatus_line = ['model-with-reasoning']",
             model.uri()
         ),
     )?;

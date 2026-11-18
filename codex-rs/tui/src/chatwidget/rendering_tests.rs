@@ -95,7 +95,7 @@ async fn status_header_tracks_current_thread_and_branch_without_changing_footer(
     let footer = widget.bottom_pane.status_line_content().cloned();
     assert_eq!(status_header_text(&widget).as_deref(), Some("First task"));
 
-    let first_cwd = widget.status_line_workspace_cwd().to_path_buf();
+    let first_cwd = widget.config.cwd.to_path_buf();
     assert_eq!(widget.status_line_branch_cwd.as_ref(), Some(&first_cwd));
     widget.set_status_line_branch(first_cwd.clone(), Some("feature/first".into()));
     assert_eq!(
@@ -216,7 +216,7 @@ fn status_header_preserves_distinct_readable_colors() {
             [(28, 65, 112), (25, 84, 52), (101, 33, 92)],
         ),
     ] {
-        let content: StatusLine = Line::from(
+        let content: FooterContent = Line::from(
             ["M", "C", "B"]
                 .into_iter()
                 .zip(colors)
@@ -236,7 +236,7 @@ fn status_header_preserves_distinct_readable_colors() {
                 let mut buffer = Buffer::empty(area);
                 StatusHeader {
                     content: &content,
-                    focus: StatusLineFocus::Focused,
+                    unfocused: false,
                 }
                 .render(area, &mut buffer);
                 for (index, color) in colors.into_iter().enumerate() {

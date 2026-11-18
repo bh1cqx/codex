@@ -3257,8 +3257,6 @@ async fn repeated_generic_warning_is_not_hidden() {
 
 #[tokio::test]
 async fn status_line_rows_override_the_fallback_and_omit_unavailable_rows() {
-    use crate::bottom_pane::StatusLineFocus;
-
     let (mut chat, mut rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.thread_id = Some(ThreadId::new());
     chat.local_settings.tui.status_line = Some(vec!["model".to_string()]);
@@ -3287,8 +3285,8 @@ async fn status_line_rows_override_the_fallback_and_omit_unavailable_rows() {
             expected.len() as u16,
         );
         let mut buffer = Buffer::empty(area);
-        assert_eq!(status.height(area.as_size()), area.height);
-        status.render(area, &mut buffer, StatusLineFocus::Focused);
+        assert_eq!(status.explicit_row_count(), Some(area.height));
+        status.clone().render(area, &mut buffer);
         let rows = (0..area.height)
             .map(|y| {
                 (0..area.width)
