@@ -205,7 +205,7 @@ fn bindings(props: &FooterProps) -> [(&'static str, Vec<Entry>); 3] {
     [
         ("Compose", compose),
         ("Session", session),
-        ("Transcript (open first)", transcript),
+        ("Transcript", transcript),
     ]
 }
 
