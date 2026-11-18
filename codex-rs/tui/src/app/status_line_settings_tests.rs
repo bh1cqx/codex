@@ -183,8 +183,7 @@ async fn reloading_the_local_provider_preserves_the_server_feature_gate() {
 }
 
 #[tokio::test]
-async fn status_line_rows_save_to_the_automatic_config_without_changing_the_shared_file()
--> anyhow::Result<()> {
+async fn status_line_rows_and_colors_save_to_their_respective_files() -> anyhow::Result<()> {
     use crate::bottom_pane::StatusLineItem;
 
     let mut app = make_test_app().await;
@@ -200,7 +199,7 @@ async fn status_line_rows_save_to_the_automatic_config_without_changing_the_shar
         .await
         .expect("load automatic config");
     app.chat_widget.local_settings = app.local_settings.clone();
-    assert_eq!(app.local_settings.user_config_path, multiline);
+    assert_eq!(app.local_settings.user_config_path, base);
 
     app.save_status_line(
         vec![StatusLineItem::CurrentDir, StatusLineItem::ThreadName],
@@ -214,10 +213,16 @@ async fn status_line_rows_save_to_the_automatic_config_without_changing_the_shar
         toml::toml! {
             [tui]
             status_line_rows = [["model"], ["current-dir", "thread-name"]]
+        }
+    );
+    assert_eq!(
+        toml::from_str::<toml::Table>(&std::fs::read_to_string(&base)?)?,
+        toml::toml! {
+            [tui]
+            status_line = ["model-with-reasoning", "current-dir"]
             status_line_use_colors = true
         }
     );
-    assert_eq!(std::fs::read_to_string(&base)?, base_text);
     Ok(())
 }
 
@@ -249,11 +254,18 @@ status_line_rows = [["model", "reasoning"], ["git-branch"]]
         [tui]
         theme = "nord"
         status_line = ["codex-version"]
-        status_line_rows = [["model", "reasoning"], ["context-used"]]
         status_line_use_colors = false
     };
     let saved: toml::Table = toml::from_str(&std::fs::read_to_string(&path)?)?;
     assert_eq!(saved, expected);
+    let multiline = app.local_settings.codex_home.join("multiline.config.toml");
+    assert_eq!(
+        toml::from_str::<toml::Table>(&std::fs::read_to_string(&multiline)?)?,
+        toml::toml! {
+            [tui]
+            status_line_rows = [["model", "reasoning"], ["context-used"]]
+        }
+    );
     let rows = Some(vec![
         vec!["model".to_string(), "reasoning".to_string()],
         vec!["context-used".to_string()],
@@ -285,6 +297,10 @@ status_line_rows = [["model", "reasoning"], ["git-branch"]]
     );
     assert_eq!(app.chat_widget.local_settings.tui.status_line_rows, None);
     assert_eq!(app.chat_widget.local_settings.tui.status_line, Some(vec![]));
+    app.refresh_in_memory_config_from_disk()
+        .await
+        .expect("reload single line");
+    assert_eq!(app.local_settings.tui.status_line_rows, None);
     Ok(())
 }
 
@@ -317,6 +333,12 @@ async fn status_line_rows_failed_saves_leave_file_and_live_settings_unchanged() 
             .is_err()
         );
         assert_eq!(std::fs::read_to_string(&path)?, text);
+        assert!(
+            !app.local_settings
+                .codex_home
+                .join("multiline.config.toml")
+                .exists()
+        );
         assert_eq!(
             (&app.local_settings, &app.chat_widget.local_settings),
             (&before.0, &before.1)

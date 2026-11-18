@@ -19,9 +19,9 @@ status_line_rows = [
 ]
 ```
 
-This fork automatically loads `multiline.config.toml` over the shared `config.toml`; no command-line flag is needed. Standard Codex continues to use `config.toml`, where you can keep its single-line `tui.status_line` setting. Keeping the fork-only setting in the separate file also lets standard Codex use `--strict-config`.
+Codex and `ccx` share `~/.codex/config.toml` for presets, model defaults, `tui.status_line`, colors, and other upstream settings. `ccx` automatically reads `tui.status_line_rows`, `tui.status_header`, and the answer-navigation and session-tab key bindings from `~/.codex/multiline.config.toml`. Edits to these fork settings go in that file. An explicit `--profile` or user-config path selects the usual profile configuration.
 
-When the automatic file is present, status-line edits are saved there. If it is absent, the fork uses the shared config. An explicit `--profile` selection or user-config path bypasses the automatic file. Invalid automatic configuration is reported as an error.
+If an older multiline file contains presets or other shared settings, `ccx` ignores those entries. Copy any values you want to keep into `config.toml`.
 
 Each inner array is one row, with items in the listed order. Rows keep the existing item colors and links. Long rows are truncated with an ellipsis; they do not wrap. Empty rows and rows whose items are all unavailable are omitted. If the terminal cannot fit every row alongside the input and required hints, Codex clips the remaining rows and marks the last visible row with an ellipsis.
 

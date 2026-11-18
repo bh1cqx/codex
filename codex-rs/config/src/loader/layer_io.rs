@@ -111,6 +111,7 @@ pub(super) async fn load_config_layers_internal(
             &managed_config_path,
             /*log_missing_as_info*/ false,
             strict_config,
+            std::convert::identity,
         )
         .await?
         .map(|loaded| MangedConfigFromFile {
@@ -152,6 +153,7 @@ pub(super) async fn read_config_from_path(
     path: &AbsolutePathBuf,
     log_missing_as_info: bool,
     strict_config: bool,
+    project: impl FnOnce(TomlValue) -> TomlValue,
 ) -> io::Result<Option<TomlValue>> {
     let path_uri = PathUri::from_abs_path(path);
     match fs
@@ -160,6 +162,7 @@ pub(super) async fn read_config_from_path(
     {
         Ok(contents) => match toml::from_str::<TomlValue>(&contents) {
             Ok(value) => {
+                let value = project(value);
                 if strict_config {
                     validate_config_toml_strictly(path, &contents, &value)?;
                 }

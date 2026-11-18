@@ -1,5 +1,6 @@
 use super::*;
 use crate::ConfigRequirementsToml;
+use crate::multiline::MULTILINE_CONFIG_TOML_FILE;
 use codex_file_system::CopyOptions;
 use codex_file_system::CreateDirectoryOptions;
 use codex_file_system::ExecutorFileSystemFuture;
@@ -28,7 +29,7 @@ async fn multiline_config_loads_automatically_over_the_base_user_config() -> any
         AbsolutePathBuf::resolve_path_against_base(MULTILINE_CONFIG_TOML_FILE, dir.path());
     std::fs::write(
         &base,
-        "model = 'base-model'\n[tui]\nstatus_line = ['current-dir']\n",
+        "model = 'base-model'\n[tui]\nstatus_line = ['current-dir']\n[tui.presets.0]\ninput = 'shared'\n",
     )?;
     let load = || {
         load_config_layers_state(
@@ -49,13 +50,29 @@ async fn multiline_config_loads_automatically_over_the_base_user_config() -> any
 
     std::fs::write(
         &multiline,
-        "[tui]\nstatus_line_rows = [['model'], ['current-dir']]\nstatus_header = ['git-branch']\n",
+        "model = 'stale'\n[tui]\nstatus_line = []\nstatus_line_rows = [['model'], ['current-dir']]\nstatus_header = ['git-branch']\n[tui.keymap.global]\nprevious_answer = 'alt-b'\n[tui.presets.0]\ninput = 'stale'\n[tui.presets.9]\ninput = 99\n",
     )?;
     let stack = load().await?;
-    assert_eq!(stack.get_user_config_file(), Some(&multiline));
+    assert_eq!(stack.get_user_config_file(), Some(&base));
+    let updated = stack.with_user_config(
+        &base,
+        toml::toml! {
+            [tui]
+            status_header = ["obsolete"]
+        }
+        .into(),
+    )?;
+    assert_eq!(updated.get_user_config_file(), Some(&base));
+    assert_eq!(
+        updated.effective_config()["tui"]["status_header"][0].as_str(),
+        Some("git-branch")
+    );
     let config: ConfigToml = stack.effective_config().try_into()?;
     assert_eq!(config.model.as_deref(), Some("base-model"));
     let tui = config.tui.expect("TUI config");
+    assert_eq!(tui.quick_dials.len(), 1);
+    assert_eq!(tui.quick_dials["0"].input, "shared");
+    assert!(tui.keymap.global.previous_answer.is_some());
     assert_eq!(tui.status_line, Some(vec!["current-dir".to_string()]));
     assert_eq!(tui.status_header, Some(vec!["git-branch".to_string()]));
     assert_eq!(
@@ -67,7 +84,7 @@ async fn multiline_config_loads_automatically_over_the_base_user_config() -> any
     );
 
     std::fs::write(&multiline, "")?;
-    assert_eq!(load().await?.get_user_config_file(), Some(&multiline));
+    assert_eq!(load().await?.get_user_config_file(), Some(&base));
     Ok(())
 }
 

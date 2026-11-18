@@ -34,6 +34,7 @@ mod mcp_types;
 mod merge;
 mod model_provider_defaults;
 mod model_provider_requirements;
+pub mod multiline;
 mod overrides;
 mod path_context;
 mod permission_config;
