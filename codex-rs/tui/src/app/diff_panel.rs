@@ -279,7 +279,7 @@ impl App {
             || self.chat_widget.has_active_view()
             || self
                 .conversation_frame
-                .chooser_area()
+                .panel_area()
                 .is_none_or(|area| area.is_empty())
             || self.sidebar().and_then(|pane| pane.visible_content()) != Some(SidebarContent::Diff)
         {
@@ -334,7 +334,7 @@ impl App {
                 let point = (mouse.column, mouse.row).into();
                 let Some(area) = self
                     .conversation_frame
-                    .chooser_area()
+                    .panel_area()
                     .filter(|area| area.contains(point))
                 else {
                     if mouse.kind == MouseEventKind::Down(MouseButton::Left) {

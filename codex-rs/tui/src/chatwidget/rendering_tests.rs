@@ -79,8 +79,9 @@ fn status_header_text(widget: &ChatWidget) -> Option<String> {
     widget
         .status_header
         .as_ref()
-        .and_then(FooterContent::native_parts)
-        .map(|(line, _)| line.to_string())
+        .cloned()
+        .map(FooterContent::into_hyperlink_line)
+        .map(|line| line.line.to_string())
 }
 
 #[tokio::test]
@@ -304,9 +305,10 @@ async fn status_header_context_meter_warns_near_capacity_without_changing_footer
             let header_style = widget
                 .status_header
                 .as_ref()
-                .and_then(FooterContent::native_parts)
+                .cloned()
+                .map(FooterContent::into_hyperlink_line)
                 .expect("header")
-                .0
+                .line
                 .spans[0]
                 .style;
             if let Some(warning) = warning.filter(|_| use_colors) {
@@ -321,9 +323,10 @@ async fn status_header_context_meter_warns_near_capacity_without_changing_footer
             } else {
                 let footer_style = widget
                     .status_line_content()
-                    .and_then(FooterContent::native_parts)
+                    .cloned()
+                    .map(FooterContent::into_hyperlink_line)
                     .expect("footer")
-                    .0
+                    .line
                     .spans[0]
                     .style;
                 assert_eq!(header_style, footer_style);
