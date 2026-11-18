@@ -13,7 +13,6 @@ use crate::app_event::CapturedSideStream;
 use crate::app_event::RecapTrigger;
 use crate::app_event::ThreadTitleDestination;
 use crate::app_server_session::ForkGoalContinuation;
-use crate::app_server_session::ThreadSettingsOwner;
 use crate::app_server_session::UnsupportedLegacyPermissionProfile;
 use crate::app_server_session::turn_permissions_overrides;
 use crate::config_update::format_config_error;
@@ -2532,20 +2531,8 @@ impl App {
                 }
             }
             AppEvent::ApplyModelSelection { model, effort } => {
-                if app_server.thread_params_mode().settings_owner()
-                    == ThreadSettingsOwner::Server
-                {
-                    self.select_session_model(
-                        app_server,
-                        model,
-                        effort,
-                        /*service_tier*/ None,
-                    )
-                    .await;
-                } else {
-                    self.apply_default_model_selection(app_server, model, effort)
-                        .await;
-                }
+                self.app_event_tx.send(AppEvent::FollowTranscript);
+                self.apply_model_selection(app_server, model, effort, /*service_tier*/ None, /*save_default*/ true).await;
             }
             AppEvent::ScopedModelPicker { .. } | AppEvent::AstraSelectedFromModelPicker { .. } => unreachable!("picker event unwrapped"),
             AppEvent::BackgroundVoiceError { thread_id, message } => {
@@ -2752,83 +2739,6 @@ impl App {
             }
             AppEvent::OpenAdvancedReasoningPopup { model } => {
                 self.chat_widget.open_advanced_reasoning_popup(model);
-            }
-            AppEvent::ApplyAdvancedReasoning { model, effort } => {
-                self.app_event_tx.send(AppEvent::FollowTranscript);
-                if app_server.thread_params_mode().settings_owner()
-                    == ThreadSettingsOwner::Server
-                {
-                    self.select_session_model(
-                        app_server,
-                        model,
-                        Some(effort),
-                        /*service_tier*/ None,
-                    )
-                    .await;
-                    if let Some(model) = sparkle_model.as_ref() {
-                        self.chat_widget
-                            .on_sparkle_model_selected_from_picker(model);
-                    }
-                    return Ok(AppRunControl::Continue);
-                }
-                if self
-                    .active_thread_model_setting_update_params(model.clone())
-                    .is_some_and(|params| params.permissions.is_some())
-                    && self.reject_pending_permission_change()
-                {
-                    return Ok(AppRunControl::Continue);
-                }
-                let model_changed = self.chat_widget.current_model() != model
-                    || self.chat_widget.current_collaboration_mode().model() != model;
-                let default_effort =
-                    self.on_apply_advanced_reasoning(model.as_str(), effort.clone());
-                if model_changed {
-                    self.sync_active_thread_model_setting(
-                        app_server,
-                        model.clone(),
-                        Some(effort.clone()),
-                    )
-                    .await;
-                } else if let Some(mut params) =
-                    self.active_thread_reasoning_setting_update_params(Some(effort.clone()))
-                {
-                    params.collaboration_mode =
-                        Some(self.chat_widget.effective_collaboration_mode());
-                    self.send_thread_settings_update(app_server, params).await;
-                }
-                self.sync_active_thread_service_tier_to_cached_session()
-                    .await;
-
-                if let Some(default_effort) = default_effort.as_ref()
-                    && let Err(err) = self.persist_model_defaults(
-                        app_server.request_handle(),
-                        crate::config_update::build_model_selection_edits(
-                            model.as_str(),
-                            Some(default_effort),
-                        ),
-                        "default model and reasoning effort",
-                    )
-                    .await
-                {
-                    let error = format_config_error(&err);
-                    tracing::error!(error = %error, "failed to persist conversation model");
-                    self.chat_widget
-                        .add_error_message(format!("Failed to save default model: {error}"));
-                } else {
-                    self.chat_widget.add_info_message(
-                        format!("Model changed to {model} {effort} for this conversation"),
-                        /*hint*/ None,
-                    );
-                }
-            }
-            AppEvent::OpenPlanReasoningScopePrompt { model, effort } => {
-                if app_server.thread_params_mode() == crate::ThreadParamsMode::Cloud {
-                    self.select_session_model(app_server, model, effort, /*service_tier*/ None)
-                        .await;
-                } else {
-                    self.chat_widget
-                        .open_plan_reasoning_scope_prompt(model, effort);
-                }
             }
             AppEvent::OpenAllModelsPopup => {
                 self.chat_widget.open_all_models_popup();
@@ -3056,7 +2966,7 @@ impl App {
             }
             AppEvent::SelectSessionModel { model, effort, service_tier } => {
                 self.app_event_tx.send(AppEvent::FollowTranscript);
-                self.select_session_model(app_server, model, effort, service_tier).await;
+                self.apply_model_selection(app_server, model, effort, service_tier, /*save_default*/ false).await;
             }
             AppEvent::OpenQuickDialEditor { target, dial } => {
                 self.chat_widget.open_quick_dial_editor(target, dial);
@@ -3175,7 +3085,7 @@ impl App {
                 match self.persist_model_defaults(app_server.request_handle(), edits, "default service tier")
                     .await
                 {
-                    Ok(()) => {
+                    Ok(_) => {
                         let message = if let Some(service_tier) = service_tier {
                             format!("Service tier set to {service_tier}")
                         } else {
@@ -3339,33 +3249,6 @@ impl App {
                     );
                     self.chat_widget.add_error_message(format!(
                         "Failed to save rate limit reminder preference: {err}"
-                    ));
-                }
-            }
-            AppEvent::PersistPlanModeReasoningEffort(effort) => {
-                self.app_event_tx.send(AppEvent::FollowTranscript);
-                let key_path = "plan_mode_reasoning_effort";
-                let edit = if let Some(effort) = effort {
-                    crate::config_update::replace_config_value(
-                        key_path,
-                        serde_json::json!(effort.to_string()),
-                    )
-                } else {
-                    crate::config_update::clear_config_value(key_path)
-                };
-                if let Err(err) = self.persist_model_defaults(
-                    app_server.request_handle(),
-                    vec![edit],
-                    "Plan mode reasoning effort",
-                )
-                .await
-                {
-                    tracing::error!(
-                        error = %err,
-                        "failed to persist plan mode reasoning effort"
-                    );
-                    self.chat_widget.add_error_message(format!(
-                        "Failed to save Plan mode reasoning effort: {err}"
                     ));
                 }
             }

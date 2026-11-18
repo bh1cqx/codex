@@ -1654,18 +1654,6 @@ pub(crate) enum AppEvent {
         model: ModelPreset,
     },
 
-    /// Apply an advanced reasoning effort to the active conversation without changing defaults.
-    ApplyAdvancedReasoning {
-        model: String,
-        effort: ReasoningEffort,
-    },
-
-    /// Open the Plan-mode reasoning scope prompt for the selected model/effort.
-    OpenPlanReasoningScopePrompt {
-        model: String,
-        effort: Option<ReasoningEffort>,
-    },
-
     /// Open the full model picker (non-auto models).
     OpenAllModelsPopup,
 
@@ -1779,9 +1767,6 @@ pub(crate) enum AppEvent {
 
     /// Persist the acknowledgement flag for the rate limit switch prompt.
     PersistRateLimitSwitchPromptHidden,
-
-    /// Persist the Plan-mode-specific reasoning effort.
-    PersistPlanModeReasoningEffort(Option<ReasoningEffort>),
 
     /// Persist the acknowledgement flag for the model migration prompt.
     PersistModelMigrationPromptAcknowledged {

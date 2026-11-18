@@ -19,35 +19,6 @@ use codex_protocol::openai_models::ReasoningEffort;
 use color_eyre::eyre::Result;
 
 impl App {
-    pub(super) async fn apply_default_model_selection(
-        &mut self,
-        app_server: &mut AppServerSession,
-        model: String,
-        effort: Option<ReasoningEffort>,
-    ) {
-        if self
-            .active_thread_model_setting_update_params(model.clone())
-            .is_some_and(|params| params.permissions.is_some())
-            && self.reject_pending_permission_change()
-        {
-            return;
-        }
-        let model_changed = self.chat_widget.current_model() != model
-            || self.chat_widget.current_collaboration_mode().model() != model;
-        if model_changed {
-            self.chat_widget.set_model(&model);
-            self.sync_active_thread_model_setting(app_server, model.clone(), /*effort*/ None)
-                .await;
-            self.sync_active_thread_service_tier_to_cached_session()
-                .await;
-        }
-        self.on_update_reasoning_effort(effort.clone());
-        self.sync_active_thread_reasoning_setting(app_server, effort.clone())
-            .await;
-        self.persist_default_model_selection(app_server.request_handle(), model, effort)
-            .await;
-    }
-
     pub(super) async fn persist_default_model_selection(
         &mut self,
         request_handle: AppServerRequestHandle,
@@ -64,7 +35,11 @@ impl App {
             )
             .await
         {
-            Ok(()) => {
+            Ok(status) => {
+                if status == WriteStatus::Ok {
+                    self.config.model = Some(model.clone());
+                    self.config.model_reasoning_effort = effort.clone();
+                }
                 let effort_label = effort
                     .as_ref()
                     .map(std::string::ToString::to_string)
@@ -75,6 +50,7 @@ impl App {
                     message.push(' ');
                     message.push_str(&label);
                 }
+                message.push_str(" (saved as default)");
                 self.chat_widget.add_info_message(message, /*hint*/ None);
             }
             Err(err) => {
@@ -86,14 +62,21 @@ impl App {
         }
     }
 
-    pub(super) async fn select_session_model(
+    pub(super) async fn apply_model_selection(
         &mut self,
         app_server: &mut AppServerSession,
         model: String,
         effort: Option<ReasoningEffort>,
         service_tier: Option<String>,
+        save_default: bool,
     ) {
         if app_server.thread_params_mode() == ThreadParamsMode::Cloud {
+            if save_default {
+                self.chat_widget.add_error_message(
+                    "Cloud conversations do not support saving a default model.".into(),
+                );
+                return;
+            }
             let Some(thread_id) = self
                 .active_thread_id
                 .filter(|id| Some(*id) == self.chat_widget.thread_id())
@@ -225,6 +208,11 @@ impl App {
         }
         self.sync_active_thread_service_tier_to_cached_session()
             .await;
+        if save_default {
+            self.persist_default_model_selection(app_server.request_handle(), model, effort)
+                .await;
+            return;
+        }
         let message = session_model_confirmation(&model, effort.as_ref(), service_tier.as_deref());
         self.chat_widget.add_info_message(message, /*hint*/ None);
     }
@@ -234,14 +222,14 @@ impl App {
         request_handle: AppServerRequestHandle,
         edits: Vec<ConfigEdit>,
         setting: &str,
-    ) -> Result<()> {
+    ) -> Result<WriteStatus> {
         let response = crate::config_update::write_config_batch(request_handle, edits).await?;
         if response.status == WriteStatus::OkOverridden {
             self.chat_widget.add_warning_message(format!(
                 "Saved {setting}, but a higher-priority configuration layer overrides the saved value."
             ));
         }
-        Ok(())
+        Ok(response.status)
     }
 }
 

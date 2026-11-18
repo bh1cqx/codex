@@ -3795,7 +3795,7 @@ async fn model_reasoning_selection_popup_applies_custom_effort() {
 
     let selected_effort_events = std::iter::from_fn(|| rx.try_recv().ok())
         .filter_map(|event| match event {
-            AppEvent::ApplyModelSelection { model, effort } => Some((model, effort)),
+            AppEvent::SelectSessionModel { model, effort, .. } => Some((model, effort)),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -3841,8 +3841,8 @@ async fn select_ultra_with_multi_agent_thread_limit(max_threads: usize) -> (bool
     let mut warnings = Vec::new();
     while let Ok(event) = rx.try_recv() {
         match event {
-            AppEvent::ApplyAdvancedReasoning {
-                effort: ReasoningEffortConfig::Ultra,
+            AppEvent::SelectSessionModel {
+                effort: Some(ReasoningEffortConfig::Ultra),
                 ..
             } => {
                 selected_ultra = true;
@@ -3888,7 +3888,7 @@ async fn max_reasoning_selection_persists_model_selection() {
         description: "Maximum reasoning".to_string(),
     }];
     chat.open_advanced_reasoning_popup(preset);
-    chat.handle_key_event(KeyEvent::from(KeyCode::Enter));
+    chat.handle_key_event(KeyEvent::from(KeyCode::Char('d')));
 
     let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
     assert!(events.iter().any(|event| matches!(
@@ -3901,7 +3901,7 @@ async fn max_reasoning_selection_persists_model_selection() {
     assert!(
         events
             .iter()
-            .all(|event| !matches!(event, AppEvent::ApplyAdvancedReasoning { .. }))
+            .all(|event| !matches!(event, AppEvent::SelectSessionModel { .. }))
     );
 }
 
@@ -4118,7 +4118,7 @@ async fn reasoning_up_shortcut_does_not_silently_enter_ultra() {
         let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
         assert!(events.iter().all(|event| !matches!(
             event,
-            AppEvent::UpdateReasoningEffort(_) | AppEvent::ApplyAdvancedReasoning { .. }
+            AppEvent::UpdateReasoningEffort(_) | AppEvent::SelectSessionModel { .. }
         )));
         let messages = events
             .into_iter()
@@ -4240,7 +4240,7 @@ async fn single_reasoning_option_skips_selection() {
     assert!(
         events
             .iter()
-            .any(|ev| matches!(ev, AppEvent::ApplyModelSelection { effort: Some(effort), .. } if *effort == ReasoningEffortConfig::High)),
+            .any(|ev| matches!(ev, AppEvent::SelectSessionModel { effort: Some(effort), .. } if *effort == ReasoningEffortConfig::High)),
         "expected reasoning effort to be applied automatically; events: {events:?}"
     );
 }
@@ -4262,7 +4262,7 @@ async fn advanced_only_reasoning_option_requires_explicit_selection() {
     assert!(events.iter().all(|event| !matches!(
         event,
         AppEvent::UpdateReasoningEffort(_)
-            | AppEvent::ApplyAdvancedReasoning { .. }
+            | AppEvent::SelectSessionModel { .. }
             | AppEvent::PersistModelSelection { .. }
     )));
 }
@@ -4289,7 +4289,7 @@ async fn auto_model_advertising_advanced_effort_opens_reasoning_picker() {
     assert!(events.iter().all(|event| !matches!(
         event,
         AppEvent::UpdateReasoningEffort(_)
-            | AppEvent::ApplyAdvancedReasoning { .. }
+            | AppEvent::SelectSessionModel { .. }
             | AppEvent::PersistModelSelection { .. }
     )));
     assert!(

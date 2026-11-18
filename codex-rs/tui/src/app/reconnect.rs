@@ -471,7 +471,11 @@ impl App {
         }
         self.model_catalog = Arc::new(
             ModelCatalog::new(bootstrap.available_models)
-                .for_backend(app_server.backend_id(), &mut self.provider_writes)
+                .for_backend(
+                    app_server.backend_id(),
+                    app_server.thread_params_mode(),
+                    &mut self.provider_writes,
+                )
                 .with_collaboration_modes(bootstrap.collaboration_modes),
         );
         self.pending_app_server_requests.clear();

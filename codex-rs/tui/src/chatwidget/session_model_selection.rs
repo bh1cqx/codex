@@ -9,12 +9,8 @@ use crate::model_catalog::LUNA_RESERVE_MODEL;
 /// A final Astra selection whose model transition must be checked while the app applies it.
 #[derive(Debug)]
 pub(crate) enum AstraModelPickerAction {
-    UpdateModel,
     ApplyModelSelection {
         effort: Option<ReasoningEffortConfig>,
-    },
-    ApplyAdvancedReasoning {
-        effort: ReasoningEffortConfig,
     },
     SelectSessionModel {
         effort: Option<ReasoningEffortConfig>,
@@ -36,11 +32,7 @@ impl AstraModelPickerAction {
 
     pub(crate) fn into_app_event(self, model: String) -> AppEvent {
         match self {
-            Self::UpdateModel => AppEvent::UpdateModel(model),
             Self::ApplyModelSelection { effort } => AppEvent::ApplyModelSelection { model, effort },
-            Self::ApplyAdvancedReasoning { effort } => {
-                AppEvent::ApplyAdvancedReasoning { model, effort }
-            }
             Self::SelectSessionModel {
                 effort,
                 service_tier,
@@ -54,52 +46,61 @@ impl AstraModelPickerAction {
 }
 
 impl ChatWidget {
-    pub(super) fn session_model_selection_action(
-        &self,
-        model: String,
-        effort: Option<ReasoningEffortConfig>,
-    ) -> Option<SelectionSecondaryAction> {
-        // Reserve selections are already session-only.
-        if model == LUNA_RESERVE_MODEL {
-            return None;
-        }
-        let key = key_hint::plain(KeyCode::Char('s'));
-        let keymap = self.bottom_pane.list_keymap();
-        let mut hints = Vec::new();
-        if let Some(accept) = keymap.primary_hint(ListAction::Accept) {
-            let label = if effort == Some(ReasoningEffortConfig::Ultra) {
-                " apply · "
-            } else {
-                " default · "
-            };
-            hints.extend([accept.into(), label.dim()]);
-        }
-        hints.extend([key.into(), " session".dim()]);
-        if let Some(cancel) = keymap.primary_hint(ListAction::Cancel) {
-            hints.extend([" · ".dim(), cancel.into(), " back".dim()]);
-        }
-        let warning = effort
-            .as_ref()
-            .and_then(|effort| self.ultra_reasoning_concurrency_warning(effort));
-        let sparkle_thread = self.sparkle_thread_for_picker_action(&model);
-        let scoped = self.scope_model_picker_event();
-        Some(SelectionSecondaryAction {
-            key,
-            footer_hint: hints.into(),
-            action: Box::new(move |tx| {
-                tx.send(scoped(
-                    AstraModelPickerAction::SelectSessionModel {
-                        effort: effort.clone(),
-                        service_tier: None,
-                    }
-                    .into_picker_event(sparkle_thread, model.clone()),
-                ));
+    pub(super) fn model_choice(&self, model: &str, effort: ReasoningEffortConfig) -> SelectionItem {
+        let thread_id = self.thread_id();
+        let sparkle_thread = self.sparkle_thread_for_picker_action(model);
+        let action = |save_default: bool| -> SelectionAction {
+            let scoped = self.scope_model_picker_event();
+            let model = model.to_owned();
+            let effort = effort.clone();
+            let warning = self.ultra_reasoning_concurrency_warning(&effort);
+            Box::new(move |tx| {
+                let effort = Some(effort.clone());
+                let event = if model == LUNA_RESERVE_MODEL {
+                    let Some(thread_id) = thread_id else { return };
+                    AppEvent::UpdateLunaReserveReasoning { thread_id, effort }
+                } else {
+                    let action = if save_default {
+                        AstraModelPickerAction::ApplyModelSelection { effort }
+                    } else {
+                        AstraModelPickerAction::SelectSessionModel {
+                            effort,
+                            service_tier: None,
+                        }
+                    };
+                    action.into_picker_event(sparkle_thread, model.clone())
+                };
+                tx.send(scoped(event));
                 if let Some(warning) = warning.clone() {
                     tx.send(scoped(AppEvent::InsertHistoryCell(Box::new(
                         history_cell::new_warning_event(warning),
                     ))));
                 }
-            }),
-        })
+            })
+        };
+        let secondary_action =
+            (model != LUNA_RESERVE_MODEL && self.model_catalog.can_save_defaults).then(|| {
+                let key = key_hint::plain(KeyCode::Char('d'));
+                let keymap = self.bottom_pane.list_keymap();
+                let mut hints = Vec::new();
+                if let Some(accept) = keymap.primary_hint(ListAction::Accept) {
+                    hints.extend([accept.into(), " session only · ".dim()]);
+                }
+                hints.extend([key.into(), " save as default".dim()]);
+                if let Some(cancel) = keymap.primary_hint(ListAction::Cancel) {
+                    hints.extend([" · ".dim(), cancel.into(), " back".dim()]);
+                }
+                SelectionSecondaryAction {
+                    key,
+                    footer_hint: hints.into(),
+                    action: action(true),
+                }
+            });
+        SelectionItem {
+            actions: vec![action(false)],
+            secondary_action,
+            dismiss_on_select: true,
+            ..Default::default()
+        }
     }
 }

@@ -562,7 +562,11 @@ impl App {
         let mut provider_writes = HashMap::new();
         let model_catalog = Arc::new(
             ModelCatalog::new(available_models.clone())
-                .for_backend(app_server.backend_id(), &mut provider_writes)
+                .for_backend(
+                    app_server.backend_id(),
+                    app_server.thread_params_mode(),
+                    &mut provider_writes,
+                )
                 .with_collaboration_modes(bootstrap.collaboration_modes),
         );
         let feedback_audience = bootstrap.feedback_audience;
