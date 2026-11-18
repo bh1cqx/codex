@@ -232,7 +232,7 @@ impl App {
         event: &TuiEvent,
     ) -> bool {
         if self.sidebar().is_some_and(sidebar::SidebarPane::is_diff)
-            && self.conversation_frame.panel_area().is_some()
+            && self.conversation_frame.chooser_area().is_some()
         {
             return false;
         }

@@ -247,7 +247,7 @@ impl App {
                 .and_then(|id| self.agents_overview.threads.get(&id))
                 .and_then(Option::as_ref)
                 .is_some_and(|thread| {
-                    is_overview_root(thread) && supports_shared_pinning(&thread.source)
+                    is_overview_thread(thread) && supports_shared_pinning(&thread.source)
                 });
         let tabs = &mut self.agents_overview.tabs;
         tabs.observe(current.filter(|id| !self.agents_overview.removed_threads.contains(id)));

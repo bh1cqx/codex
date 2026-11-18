@@ -810,7 +810,7 @@ pub(super) fn content_layout(
             side_pane::pair_layout(app, child, [main, sidebar]).map(SidebarLayout::Chat)
         }
         SidebarContent::Diff => {
-            (!app.chat_widget.has_active_view()).then_some(SidebarLayout::Panel {
+            (!app.chat_widget.has_active_view()).then_some(SidebarLayout::Chooser {
                 main,
                 sidebar,
                 focus,
