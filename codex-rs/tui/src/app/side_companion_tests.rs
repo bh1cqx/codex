@@ -15,7 +15,11 @@ fn buffered_answer_requires_a_paint_before_wheel_input() {
         .render(area, &mut Buffer::empty(area), &pane.cells);
     assert!(pane.can_scroll_without_refresh());
 
-    let mut answer = SideAnswer::new(("turn".into(), "item".into()), /*index*/ 0, /*phase*/ None);
+    let mut answer = SideAnswer::new(
+        ("turn".into(), "item".into()),
+        /*index*/ 0,
+        /*phase*/ None,
+    );
     answer.pending = "new reply".into();
     pane.answer = Some(answer);
     assert!(!pane.can_scroll_without_refresh());

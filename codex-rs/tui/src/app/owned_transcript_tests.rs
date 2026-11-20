@@ -117,7 +117,7 @@ async fn status_header_stays_pinned_in_chat_and_hides_in_agents_view() -> Result
         assert_eq!(
             app.chat_widget
                 .status_line_content()
-                .and_then(crate::bottom_pane::footer_content::FooterContent::explicit_row_count),
+                .and_then(crate::bottom_pane::StatusLine::explicit_row_count),
             Some(1)
         );
     }

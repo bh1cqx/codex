@@ -758,7 +758,9 @@ impl ChatWidget {
 
     fn uses_workspace_headline(&self, selections: &StatusSurfaceSelections) -> bool {
         self.provider_needs_snapshot()
-            || selections.native_status_items().any(|item| item == StatusLineItem::WorkspaceHeadline)
+            || selections
+                .native_status_items()
+                .any(|item| item == StatusLineItem::WorkspaceHeadline)
     }
 
     fn request_status_line_workspace_headline_if_due(&mut self, now: Instant) {

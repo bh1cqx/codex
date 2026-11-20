@@ -4147,7 +4147,7 @@ async fn handle_start_side_seeds_navigation_before_thread_started() -> Result<()
         config.codex_home.join("config.toml"),
         // Each thread reloads this footer. Omit the platform-specific working directory.
         format!(
-            "openai_base_url = '{}/v1'\ndefault_permissions = ':workspace'\n[permissions.side-reader]\nextends = ':read-only'\n[tui]\nresume_cwd = 'session'\nstatus_line = ['model-with-reasoning']",
+            "openai_base_url = '{}/v1'\ndefault_permissions = ':workspace'\n[permissions.side-reader]\nextends = ':read-only'\n[tui]\nstatus_line = ['model-with-reasoning']",
             model.uri()
         ),
     )?;

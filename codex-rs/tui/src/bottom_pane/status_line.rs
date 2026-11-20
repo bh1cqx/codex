@@ -171,18 +171,27 @@ impl StatusLine {
         let rows = match &self.0 {
             StatusContent::Native(native) => {
                 wrapped = wrapped_rows(native, area.as_size());
-                wrapped.as_deref().unwrap_or_else(|| std::slice::from_ref(native.content.as_ref()))
+                wrapped
+                    .as_deref()
+                    .unwrap_or_else(|| std::slice::from_ref(native.content.as_ref()))
             }
             StatusContent::NativeRows(rows) => rows.as_slice(),
             StatusContent::Extension(extension) => {
-                let plain_style = (focus == StatusLineFocus::Unfocused).then(|| Style::reset().dim());
+                let plain_style =
+                    (focus == StatusLineFocus::Unfocused).then(|| Style::reset().dim());
                 with_syntax_theme(|theme| extension.content.render(area, theme, buf, plain_style));
                 return;
             }
         };
         let more_rows = rows.len() > usize::from(area.height);
         for (row, line) in area.rows().zip(rows) {
-            render_status_row(line, row, buf, focus, more_rows && row.bottom() == area.bottom());
+            render_status_row(
+                line,
+                row,
+                buf,
+                focus,
+                more_rows && row.bottom() == area.bottom(),
+            );
         }
     }
 }

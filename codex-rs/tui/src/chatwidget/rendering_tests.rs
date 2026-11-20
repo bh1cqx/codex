@@ -79,8 +79,7 @@ fn status_header_text(widget: &ChatWidget) -> Option<String> {
     widget
         .status_header
         .as_ref()
-        .cloned()
-        .map(FooterContent::into_hyperlink_line)
+        .and_then(crate::bottom_pane::StatusLine::as_native)
         .map(|line| line.line.to_string())
 }
 
@@ -217,7 +216,7 @@ fn status_header_preserves_distinct_readable_colors() {
             [(28, 65, 112), (25, 84, 52), (101, 33, 92)],
         ),
     ] {
-        let content: FooterContent = Line::from(
+        let content: crate::bottom_pane::StatusLine = Line::from(
             ["M", "C", "B"]
                 .into_iter()
                 .zip(colors)
@@ -305,8 +304,7 @@ async fn status_header_context_meter_warns_near_capacity_without_changing_footer
             let header_style = widget
                 .status_header
                 .as_ref()
-                .cloned()
-                .map(FooterContent::into_hyperlink_line)
+                .and_then(crate::bottom_pane::StatusLine::as_native)
                 .expect("header")
                 .line
                 .spans[0]
@@ -323,8 +321,7 @@ async fn status_header_context_meter_warns_near_capacity_without_changing_footer
             } else {
                 let footer_style = widget
                     .status_line_content()
-                    .cloned()
-                    .map(FooterContent::into_hyperlink_line)
+                    .and_then(crate::bottom_pane::StatusLine::as_native)
                     .expect("footer")
                     .line
                     .spans[0]

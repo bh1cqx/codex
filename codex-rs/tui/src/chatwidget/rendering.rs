@@ -35,7 +35,11 @@ impl Renderable for StatusHeader<'_> {
             /*bottom*/ 0,
             /*right*/ 0,
         ));
-        let focus = if self.unfocused { StatusLineFocus::Unfocused } else { StatusLineFocus::Focused };
+        let focus = if self.unfocused {
+            StatusLineFocus::Unfocused
+        } else {
+            StatusLineFocus::Focused
+        };
         self.content.render(content_area, buf, focus);
         let surface = crate::style::status_header_style();
         for position in header_area.positions() {

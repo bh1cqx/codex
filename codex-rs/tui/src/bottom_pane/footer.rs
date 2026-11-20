@@ -817,7 +817,9 @@ pub(crate) fn passive_footer_status_line(props: &FooterProps) -> Option<StatusLi
     if status.is_none() && suffix.spans.is_empty() {
         return None;
     }
-    let mut status = status.cloned().unwrap_or_else(|| HyperlinkLine::default().into());
+    let mut status = status
+        .cloned()
+        .unwrap_or_else(|| HyperlinkLine::default().into());
     let Some(line) = status.first_native_row_mut() else {
         return Some(status);
     };
