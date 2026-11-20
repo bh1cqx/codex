@@ -751,6 +751,7 @@ mod tests {
             Some(&["model".to_string()]),
             Some(2),
             /*use_theme_colors*/ false,
+            StatuslineProviderActions::Hidden,
             StatusSurfacePreviewData::default(),
             AppEventSender::new(tx),
             crate::keymap::RuntimeKeymap::defaults().list,

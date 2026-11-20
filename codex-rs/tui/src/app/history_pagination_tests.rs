@@ -114,10 +114,14 @@ async fn answers_only_paging_preserves_interleaved_turn_items() {
     follow_up.items = vec![ThreadItem::untimed(items[65].clone())];
     let cwd = app.config.cwd.clone();
     let (cells, _) = app.project_older_history_cells(
-        items.into_iter().enumerate().map(|(index, item)| {
-            let turn = if index == 65 { &follow_up } else { &parent };
-            (turn.id.clone(), item)
-        }).collect(),
+        items
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let turn = if index == 65 { &follow_up } else { &parent };
+                (turn.id.clone(), item)
+            })
+            .collect(),
         &[parent, follow_up],
         &HashSet::new(),
         ThreadId::new(),
@@ -314,7 +318,7 @@ async fn generated_image_from_an_older_page_follows_its_answer() {
         assert_eq!(
             rows,
             [
-                "• Here is the drawing.",
+                "▌ Here is the drawing.",
                 "  Generated image",
                 if completed {
                     "  Worked for 2s"

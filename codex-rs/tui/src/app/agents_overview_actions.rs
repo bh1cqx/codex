@@ -175,7 +175,12 @@ impl App {
             }
         }
         self.cancel_agents_overview_refresh(backend_id);
-        if backend_id == app_server.backend_id() {
+        if backend_id == app_server.backend_id()
+            && self
+                .chat_widget
+                .selected_index_for_present_view(AGENTS_OVERVIEW_VIEW_ID)
+                .is_some()
+        {
             self.refresh_agents_overview_threads(app_server);
         }
 

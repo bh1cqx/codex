@@ -419,9 +419,10 @@ async fn cloud_speed_tracks_the_model_staged_for_the_next_turn() -> Result<()> {
         app.chat_widget.handle_key_event(KeyCode::Esc.into());
         while events.try_recv().is_ok() {}
 
-        let select_model = || AppEvent::ApplyModelSelection {
+        let select_model = || AppEvent::SelectSessionModel {
             model: selected.into(),
             effort: None,
+            service_tier: None,
         };
         if selected == "fast-model" {
             Box::pin(app.handle_event(&mut tui, &mut server, select_model())).await?;

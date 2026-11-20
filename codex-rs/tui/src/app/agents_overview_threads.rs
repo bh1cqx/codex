@@ -320,23 +320,19 @@ impl App {
         {
             return;
         }
-        let overview = &mut self.agents_overview;
-        let initialized = overview.initialized.contains(&backend_id);
-        let source_has_more = overview
-            .discovery
-            .get(&backend_id)
-            .is_none_or(AgentsOverviewDiscovery::has_more);
+        let initialized = self.agents_overview.initialized.contains(&backend_id);
         let visible = self
             .chat_widget
             .selected_index_for_present_view(AGENTS_OVERVIEW_VIEW_ID)
             .is_some();
         if !visible
-            && !self.has_session_tabs()
             && initialized
             && !self.agents_overview.pin_refresh_requested
+            && !self.has_session_tabs()
         {
             return;
         }
+        let overview = &mut self.agents_overview;
         if overview.active_refresh.is_some() {
             if !overview.pending_refresh_backends.contains(&backend_id) {
                 overview.pending_refresh_backends.push_back(backend_id);
@@ -344,6 +340,10 @@ impl App {
             return;
         }
         let refill = overview.refill_count(backend_id);
+        let source_has_more = overview
+            .discovery
+            .get(&backend_id)
+            .is_none_or(AgentsOverviewDiscovery::has_more);
         let queued = overview.pending_refresh_backends.contains(&backend_id);
         if queued {
             overview

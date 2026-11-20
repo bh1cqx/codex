@@ -3,7 +3,7 @@ source: tui/src/chatwidget/tests/exec_flow.rs
 assertion_line: 1189
 expression: combined
 ---
-• Here is the square.
+▌ Here is the square.
 
 • Generated Image:
   └ A tiny blue square

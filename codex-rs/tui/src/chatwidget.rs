@@ -2100,7 +2100,6 @@ impl ChatWidget {
     }
 
     #[cfg(test)]
-    #[cfg(test)]
     pub(crate) fn status_line_text(&self) -> Option<String> {
         self.status_line_content().map(|status| {
             status

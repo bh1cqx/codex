@@ -93,10 +93,10 @@ impl SessionTabs {
         TabStrip {
             ids: &ids,
             selected: self.current,
-            tab_width: 26,
         }
-        .strip_targets(self.area)
-        .collect()
+        .layout_targets(
+            self.area, /*preferred_width*/ 26, /*show_close*/ false,
+        )
     }
 
     fn hit(&self, position: Position) -> Option<TabAction> {
@@ -108,7 +108,7 @@ impl SessionTabs {
                     Some(TabAction::Select(id))
                 }
                 TabTarget::Add if self.can_pin && !self.pin_pending => Some(TabAction::TogglePin),
-                TabTarget::Add => None,
+                TabTarget::Add | TabTarget::Close(_) => None,
             })
     }
 
@@ -145,6 +145,7 @@ impl SessionTabs {
                     let unread = if tab.unread { "*" } else { "" };
                     format!(" {status}{unread} {}", tab.title)
                 }
+                TabTarget::Close(_) => continue,
                 TabTarget::Overflow { glyph, .. } => glyph.to_string(),
                 TabTarget::Add if self.pin_pending => " … ".to_string(),
                 TabTarget::Add if self.can_pin => {
@@ -247,7 +248,7 @@ impl App {
                 .and_then(|id| self.agents_overview.threads.get(&id))
                 .and_then(Option::as_ref)
                 .is_some_and(|thread| {
-                    is_overview_thread(thread) && supports_shared_pinning(&thread.source)
+                    is_overview_root(thread) && supports_shared_pinning(&thread.source)
                 });
         let tabs = &mut self.agents_overview.tabs;
         tabs.observe(current.filter(|id| !self.agents_overview.removed_threads.contains(id)));

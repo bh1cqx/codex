@@ -49,6 +49,19 @@ impl<'a, Id: Copy + Eq> TabStrip<'a, Id> {
     }
 
     pub(crate) fn strip_targets(self, area: Rect) -> Vec<(TabTarget<Id>, Rect)> {
+        self.layout_targets(
+            area,
+            (area.width / 4).clamp(MIN_TAB_WIDTH, MAX_TAB_WIDTH),
+            /*show_close*/ true,
+        )
+    }
+
+    pub(crate) fn layout_targets(
+        self,
+        area: Rect,
+        preferred_width: u16,
+        show_close: bool,
+    ) -> Vec<(TabTarget<Id>, Rect)> {
         let width = area.width.saturating_sub(1);
         let plus = width.min(3);
         let available = width - plus;
@@ -56,13 +69,12 @@ impl<'a, Id: Copy + Eq> TabStrip<'a, Id> {
         let rect = |offset, width| Rect::new(area.x + offset, area.y, width, height);
         let mut targets = Vec::new();
         if available > 0 && !self.ids.is_empty() {
-            let preferred = (area.width / 4).clamp(MIN_TAB_WIDTH, MAX_TAB_WIDTH);
-            let stride = preferred + TAB_GAP;
+            let stride = preferred_width + TAB_GAP;
             let overflow = self.ids.len() > usize::from(((available + TAB_GAP) / stride).max(1));
             // Tiny strips spend their space on the title.
             let gutter = if overflow && available >= 7 { 2 } else { 0 };
             let space = available - 2 * gutter;
-            let width = space.min(preferred);
+            let width = space.min(preferred_width);
             let count = usize::from((space + TAB_GAP) / (width + TAB_GAP)).min(self.ids.len());
             let start = self
                 .selected_index()
@@ -80,7 +92,7 @@ impl<'a, Id: Copy + Eq> TabStrip<'a, Id> {
             }
             let mut x = gutter;
             for &id in &self.ids[start..end] {
-                let close = u16::from(width >= 3);
+                let close = u16::from(show_close && width >= 3);
                 let label = width - close;
                 targets.push((TabTarget::Tab(id), rect(x, label)));
                 if close > 0 {

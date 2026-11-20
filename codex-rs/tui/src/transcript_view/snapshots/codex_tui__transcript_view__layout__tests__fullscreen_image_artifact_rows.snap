@@ -6,7 +6,7 @@ expression: "format!(\"Collapsed inspection / generated output\\n{collapsed}\\nG
 Collapsed inspection / generated output
     ▸ Viewed image /workspace/artifact.png
 
-• Here is the image.
+▌ Here is the image.
 
   Generated image
 
@@ -48,7 +48,7 @@ Expanded inspection / generated output
 
 
 
-• Here is the image.
+▌ Here is the image.
 
   Generated image
 

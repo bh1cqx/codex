@@ -3286,7 +3286,11 @@ async fn status_line_rows_override_the_fallback_and_omit_unavailable_rows() {
         );
         let mut buffer = Buffer::empty(area);
         assert_eq!(status.explicit_row_count(), Some(area.height));
-        status.clone().render(area, &mut buffer);
+        status.render(
+            area,
+            &mut buffer,
+            crate::bottom_pane::StatusLineFocus::Focused,
+        );
         let rows = (0..area.height)
             .map(|y| {
                 (0..area.width)
