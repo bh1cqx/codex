@@ -36,7 +36,7 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn message_presentation_survives_side_pane_streaming_and_completion() {
-    let cwd = AbsolutePathBuf::from_absolute_path(std::env::temp_dir()).unwrap();
+    let cwd = std::env::temp_dir();
     let store = ThreadEventStore::new(32);
     for (phase, prefix) in [
         (None, "• "),

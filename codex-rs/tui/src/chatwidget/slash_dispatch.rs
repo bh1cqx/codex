@@ -500,10 +500,7 @@ impl ChatWidget {
             SlashCommand::Tui => self.show_tui_mode_picker(),
             SlashCommand::Diff => {
                 self.add_diff_in_progress();
-                let cwd = self
-                    .current_cwd
-                    .clone()
-                    .unwrap_or_else(|| self.config.cwd.to_path_buf());
+                let cwd = self.session_cwd().clone();
                 let request_id = uuid::Uuid::new_v4();
                 let thread_id = self.thread_id;
                 self.app_event_tx.send(AppEvent::DiffStarted {

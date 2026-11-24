@@ -1088,13 +1088,13 @@ pub(crate) enum AppEvent {
     DiffStarted {
         request_id: uuid::Uuid,
         thread_id: Option<ThreadId>,
-        cwd: PathBuf,
+        cwd: PathUri,
     },
     /// Result of opening or refreshing the workspace diff.
     DiffResult {
         request_id: uuid::Uuid,
         thread_id: Option<ThreadId>,
-        cwd: PathBuf,
+        cwd: PathUri,
         result: Result<String, String>,
     },
 

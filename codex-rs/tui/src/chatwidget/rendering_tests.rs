@@ -110,7 +110,7 @@ async fn status_header_tracks_current_thread_and_branch_without_changing_footer(
     );
 
     let second_cwd = crate::test_support::test_path_buf("/tmp/second-project");
-    widget.current_cwd = Some(second_cwd.clone());
+    widget.current_cwd = PathUri::from_host_native_path(&second_cwd).expect("valid test path");
     widget.refresh_status_surfaces();
     widget.set_status_line_branch(first_cwd, Some("stale-branch".into()));
     assert_eq!(status_header_text(&widget).as_deref(), Some("Renamed task"));

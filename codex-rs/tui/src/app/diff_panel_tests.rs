@@ -113,7 +113,7 @@ async fn diff_panel_auto_refreshes_external_edits_without_stealing_focus() -> Re
         &mut tui,
         Uuid::new_v4(),
         Some(thread),
-        repo.path().to_path_buf(),
+        PathUri::from_host_native_path(repo.path())?,
     );
     finish_requested_diff(&mut app, &mut tui, &mut events).await;
     let size = Size::new(140, 24);
@@ -169,7 +169,7 @@ async fn diff_panel_refresh_errors_keep_the_snapshot_and_manual_refresh_keeps_sc
     app.local_settings.tui.animations = false;
     let thread = ThreadId::new();
     attach_thread(&mut app, thread);
-    let cwd = app.chat_widget.config_ref().cwd.to_path_buf();
+    let cwd = app.chat_widget.session_cwd().clone();
     let mut tui = crate::tui::test_support::make_test_tui()?;
     tui.set_owned_screen(true)?;
     let request = Uuid::new_v4();
@@ -281,7 +281,7 @@ async fn diff_panel_hidden_and_covered_views_do_not_poll() -> Result<()> {
     app.local_settings.tui.animations = false;
     let thread = ThreadId::new();
     attach_thread(&mut app, thread);
-    let cwd = app.chat_widget.config_ref().cwd.to_path_buf();
+    let cwd = app.chat_widget.session_cwd().clone();
     let mut tui = crate::tui::test_support::make_test_tui()?;
     tui.set_owned_screen(true)?;
     let request = Uuid::new_v4();
@@ -364,7 +364,7 @@ async fn diff_panel_preserves_chat_draft_and_side_chat_while_scrolling_and_closi
     );
     tui.set_owned_screen(true)?;
     let request = Uuid::new_v4();
-    let cwd = app.chat_widget.config_ref().cwd.to_path_buf();
+    let cwd = app.chat_widget.session_cwd().clone();
     app.start_diff_view(&mut tui, request, Some(thread), cwd.clone());
     app.complete_diff_view(
         &mut tui,
@@ -480,7 +480,7 @@ async fn diff_panel_yields_to_the_agent_command_center() -> Result<()> {
     let mut tui = crate::tui::test_support::make_test_tui()?;
     tui.set_owned_screen(true)?;
     let request = Uuid::new_v4();
-    let cwd = app.chat_widget.config_ref().cwd.to_path_buf();
+    let cwd = app.chat_widget.session_cwd().clone();
     app.start_diff_view(&mut tui, request, Some(thread), cwd.clone());
     crate::app::test_support::side_frame(&mut app, &mut tui, Size::new(80, 24))?;
     assert_eq!(
@@ -521,7 +521,7 @@ async fn stale_diff_results_cannot_replace_refreshes_or_reopen_a_hidden_panel() 
     attach_thread(&mut app, thread);
     let mut tui = crate::tui::test_support::make_test_tui()?;
     tui.set_owned_screen(true)?;
-    let cwd = app.chat_widget.config_ref().cwd.to_path_buf();
+    let cwd = app.chat_widget.session_cwd().clone();
     let old = Uuid::new_v4();
     let current = Uuid::new_v4();
     app.start_diff_view(&mut tui, old, Some(thread), cwd.clone());
@@ -577,7 +577,7 @@ async fn inline_diff_keeps_the_existing_pager() -> Result<()> {
     attach_thread(&mut app, thread);
     let mut tui = crate::tui::test_support::make_test_tui()?;
     let request = Uuid::new_v4();
-    let cwd = app.chat_widget.config_ref().cwd.to_path_buf();
+    let cwd = app.chat_widget.session_cwd().clone();
     app.start_diff_view(&mut tui, request, Some(thread), cwd.clone());
     app.complete_diff_view(
         &mut tui,
@@ -592,18 +592,18 @@ async fn inline_diff_keeps_the_existing_pager() -> Result<()> {
 
 #[test]
 fn embedded_diff_pager_handles_small_and_offset_rectangles() {
+    let cwd = PathUri::parse("file:///repo").expect("valid test URI");
     let keymap = RuntimeKeymap::from_config(&TuiKeymap::default())
         .unwrap()
         .pager;
     for width in [0, 1, 5, 8, 40] {
         for height in [0, 1, 2, 4, 6, 12] {
-            let mut diff =
-                DiffPanel::new(Uuid::new_v4(), None, PathBuf::new(), true, keymap.clone());
+            let mut diff = DiffPanel::new(Uuid::new_v4(), None, cwd.clone(), true, keymap.clone());
             let area = Rect::new(3, 4, width, height);
             diff.render(area, &mut Buffer::empty(area));
         }
     }
-    let mut diff = DiffPanel::new(Uuid::new_v4(), None, PathBuf::new(), true, keymap);
+    let mut diff = DiffPanel::new(Uuid::new_v4(), None, cwd, true, keymap);
     let area = Rect::new(3, 4, 40, 12);
     let mut buffer = Buffer::empty(area);
     diff.render(area, &mut buffer);
@@ -624,7 +624,7 @@ async fn ctrl_c_closes_the_diff_without_exiting_when_disconnected() -> Result<()
         &mut tui,
         Uuid::new_v4(),
         Some(thread),
-        app.chat_widget.config_ref().cwd.to_path_buf(),
+        app.chat_widget.session_cwd().clone(),
     );
     app.reconnect.offline = true;
     app.chat_widget
@@ -684,7 +684,7 @@ async fn close_sidebar_shortcut_only_hides_the_diff() -> Result<()> {
         &mut tui,
         Uuid::new_v4(),
         Some(thread),
-        app.chat_widget.config_ref().cwd.to_path_buf(),
+        app.chat_widget.session_cwd().clone(),
     );
     assert!(app.handle_diff_panel_event(&mut tui, &TuiEvent::Key(KeyEvent::from(KeyCode::F(12))))?);
     assert!(

@@ -291,9 +291,7 @@ impl App {
 
         if let Some(overlay) = &self.overlay {
             let contexts = match overlay.input_transcript() {
-                Some(view) if view.is_search_editing() => {
-                    KeymapContextSet::transcript_search()
-                }
+                Some(view) if view.is_search_editing() => KeymapContextSet::transcript_search(),
                 Some(view) if view.is_select_mode() => {
                     KeymapContextSet::transcript().with_transcript_select()
                 }

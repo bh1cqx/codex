@@ -14,12 +14,12 @@ use crate::keymap::bindings_for_action;
 use crate::keymap::keymap_action_ids;
 use crate::pager_overlay::Overlay;
 use crate::pager_overlay::StaticOverlay;
-use crate::session_resume::cwds_differ;
 use crate::tui::Tui;
 use crate::tui::TuiEvent;
 use crate::workspace_command::WorkspaceCommandRunner;
 use codex_ansi_escape::ansi_escape_line;
 use codex_protocol::ThreadId;
+use codex_utils_path_uri::PathUri;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyEventKind;
 use crossterm::event::MouseButton;
@@ -28,7 +28,6 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::Line;
 use ratatui::widgets::Widget;
-use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 use tokio_util::task::AbortOnDropHandle;
@@ -39,7 +38,7 @@ const DIFF_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 pub(super) struct DiffPanel {
     request_id: Uuid,
     thread_id: Option<ThreadId>,
-    cwd: PathBuf,
+    cwd: PathUri,
     panel: bool,
     view: StaticOverlay,
     keymap: PagerKeymap,
@@ -58,7 +57,7 @@ impl DiffPanel {
     fn new(
         request_id: Uuid,
         thread_id: Option<ThreadId>,
-        cwd: PathBuf,
+        cwd: PathUri,
         panel: bool,
         keymap: PagerKeymap,
     ) -> Self {
@@ -92,17 +91,15 @@ impl DiffPanel {
         let cwd = self.cwd.clone();
         self.pending = Some(AbortOnDropHandle::new(tokio::spawn(async move {
             let result = match runner {
-                Some(runner) => {
-                    get_git_diff(runner.as_ref(), &cwd)
-                        .await
-                        .map(|(is_git_repo, text)| {
-                            if is_git_repo {
-                                text
-                            } else {
-                                "`/diff` — _not inside a git repository_".to_owned()
-                            }
-                        })
-                }
+                Some(runner) => get_git_diff(runner.as_ref(), &cwd.to_path_buf()).await.map(
+                    |(is_git_repo, text)| {
+                        if is_git_repo {
+                            text
+                        } else {
+                            "`/diff` — _not inside a git repository_".to_owned()
+                        }
+                    },
+                ),
                 None => Err("workspace command runner unavailable".to_owned()),
             };
             tx.send(AppEvent::DiffResult {
@@ -151,10 +148,10 @@ impl App {
     pub(super) fn prepare_diff_panel(&mut self) {
         let parent = self.sidebar_parent();
         let thread = self.current_displayed_thread_id();
-        let cwd = self.chat_widget.config_ref().cwd.as_path();
+        let cwd = self.chat_widget.session_cwd();
         if let Some(pane) = self.sidebars.get_mut(&parent)
             && let Some(diff) = &pane.diff
-            && (diff.thread_id != thread || cwds_differ(&diff.cwd, cwd))
+            && (diff.thread_id != thread || &diff.cwd != cwd)
         {
             pane.hide();
             pane.diff = None;
@@ -166,10 +163,10 @@ impl App {
         tui: &mut Tui,
         request_id: Uuid,
         thread_id: Option<ThreadId>,
-        cwd: PathBuf,
+        cwd: PathUri,
     ) {
         if thread_id != self.current_displayed_thread_id()
-            || cwds_differ(&cwd, self.chat_widget.config_ref().cwd.as_path())
+            || &cwd != self.chat_widget.session_cwd()
             || self.overlay.is_some()
             || self.chat_widget.has_active_view()
             || self.sidebar().is_some_and(|pane| pane.close.is_some())
@@ -183,9 +180,7 @@ impl App {
             .sidebar_mut()
             .diff
             .take()
-            .filter(|diff| {
-                panel && diff.panel && diff.thread_id == thread_id && !cwds_differ(&diff.cwd, &cwd)
-            })
+            .filter(|diff| panel && diff.panel && diff.thread_id == thread_id && diff.cwd == cwd)
             .unwrap_or_else(|| {
                 DiffPanel::new(request_id, thread_id, cwd, panel, self.keymap.pager.clone())
             });
@@ -210,7 +205,7 @@ impl App {
         tui: &mut Tui,
         request_id: Uuid,
         thread_id: Option<ThreadId>,
-        cwd: PathBuf,
+        cwd: PathUri,
         result: Result<String, String>,
     ) {
         self.prepare_diff_panel();
@@ -218,9 +213,7 @@ impl App {
             pane.diff
                 .as_ref()
                 .filter(|diff| {
-                    diff.request_id == request_id
-                        && diff.thread_id == thread_id
-                        && !cwds_differ(&diff.cwd, &cwd)
+                    diff.request_id == request_id && diff.thread_id == thread_id && diff.cwd == cwd
                 })
                 .map(|_| *parent)
         }) else {

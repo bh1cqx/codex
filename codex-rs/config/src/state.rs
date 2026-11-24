@@ -581,7 +581,7 @@ impl ConfigLayerStack {
     /// the base `$CODEX_HOME/config.toml` layer because the active layer is the
     /// writable target for profile-aware edits.
     pub fn get_active_user_layer(&self) -> Option<&ConfigLayerEntry> {
-        self.all_layers_low_to_high().rev().find(|layer| {
+        self.all_layers_high_to_low().find(|layer| {
             !layer.multiline_overlay && matches!(layer.name, ConfigLayerSource::User { .. })
         })
     }

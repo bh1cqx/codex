@@ -14,7 +14,6 @@ use crate::wrapping::RtOptions;
 use crate::wrapping::adaptive_wrap_lines;
 use crate::wrapping::word_wrap_lines;
 use ratatui::style::Color;
-use ratatui::style::Styled as _;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
 use std::cell::Cell;

@@ -54,7 +54,7 @@ async fn diff_result_matches_the_server_session_cwd() -> Result<()> {
     use codex_utils_path_uri::LegacyAppPathString;
     use codex_utils_path_uri::PathUri;
 
-    let mut app = make_test_app().await;
+    let (mut app, mut events, _ops) = make_test_app_with_channels().await;
     let (client, _commands, _events) =
         codex_app_server_client::CloudClient::channel(/*capacity*/ 1);
     let mut server = AppServerSession::new(
@@ -68,11 +68,31 @@ async fn diff_result_matches_the_server_session_cwd() -> Result<()> {
     let mut session = test_thread_session(ThreadId::new(), app.config.cwd.to_path_buf());
     session.cwd = cwd.clone();
     app.chat_widget.handle_thread_session(session);
-    let stale = AppEvent::DiffResult(app.config.cwd.clone().into(), "old diff".into());
+    app.chat_widget
+        .dispatch_command(crate::slash_command::SlashCommand::Diff);
+    let (request_id, thread_id, requested_cwd) = std::iter::from_fn(|| events.try_recv().ok())
+        .find_map(|event| match event {
+            AppEvent::DiffStarted {
+                request_id,
+                thread_id,
+                cwd,
+            } => Some((request_id, thread_id, cwd)),
+            _ => None,
+        })
+        .expect("/diff starts a request");
+    assert_eq!(requested_cwd, cwd);
+    app.start_diff_view(&mut tui, request_id, thread_id, requested_cwd);
+    let diff_result = |cwd, text: &str| AppEvent::DiffResult {
+        request_id,
+        thread_id,
+        cwd,
+        result: Ok(text.to_owned()),
+    };
+    let stale = diff_result(app.config.cwd.clone().into(), "old diff");
     Box::pin(app.handle_event(&mut tui, &mut server, stale)).await?;
     assert!(app.overlay.is_none());
 
-    let current = AppEvent::DiffResult(cwd, "current diff".into());
+    let current = diff_result(cwd, "current diff");
     Box::pin(app.handle_event(&mut tui, &mut server, current)).await?;
     assert!(app.overlay.is_some());
     Ok(())
@@ -6175,7 +6195,7 @@ async fn change_directory_scenario() -> Result<()> {
     let diff = AppEvent::DiffResult {
         request_id: uuid::Uuid::new_v4(),
         thread_id: Some(original),
-        cwd: current.clone(),
+        cwd: current.clone().abs().into(),
         result: Ok("stale diff".to_string()),
     };
     let branch = AppEvent::SyncThreadGitBranch {
