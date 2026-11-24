@@ -938,8 +938,15 @@ impl App {
         if is_replay_only && let Some(session) = snapshot.session.as_mut() {
             session.read_only_history = true;
         }
-        self.render_thread_snapshot(tui, app_server, thread_id, snapshot, !is_replay_only)
-            .await?;
+        // Keep the widget rebuild out of the enclosing thread-selection future.
+        Box::pin(self.render_thread_snapshot(
+            tui,
+            app_server,
+            thread_id,
+            snapshot,
+            !is_replay_only,
+        ))
+        .await?;
         if !is_replay_only
             && let Some(message) = self
                 .side_threads
